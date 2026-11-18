@@ -23,7 +23,16 @@
             display: none;
             box-shadow: 0 0 10px rgba(0,0,0,0.5);
             will-change: transform;
+            transition: transform 0.12s ease-out;
         }
+        /* Halo grande y tenue: no "llama" a la mirada como un punto rojo saltarín */
+        #gaze-cursor.cursor-halo {
+            width: 90px; height: 90px;
+            background-color: rgba(59, 130, 246, 0.12);
+            border: 3px solid rgba(59, 130, 246, 0.35);
+            box-shadow: none;
+        }
+        #gaze-cursor.cursor-hidden { opacity: 0; }
 
         .gaze-target {
             transition: all 0.3s ease;
@@ -158,6 +167,31 @@
                 <option value="child">Voz Aniñada (Tono agudo)</option>
             </select>
             <button id="btn-recal" class="ml-4 px-4 py-2 bg-slate-200 rounded-lg font-semibold hover:bg-slate-300 hidden">Recalibrar</button>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-6 bg-white p-4 rounded-xl shadow border-2 border-slate-200 text-lg">
+            <label class="flex items-center gap-2 font-semibold">Estabilidad:
+                <select id="set-stability" class="border-2 rounded p-1 font-normal cursor-pointer">
+                    <option value="baja">Baja (más rápido)</option>
+                    <option value="media">Media</option>
+                    <option value="alta">Alta (más estable)</option>
+                </select>
+            </label>
+            <label class="flex items-center gap-2 font-semibold">Tiempo para elegir:
+                <select id="set-dwell" class="border-2 rounded p-1 font-normal cursor-pointer">
+                    <option value="1000">1 s</option>
+                    <option value="1500">1,5 s</option>
+                    <option value="2000">2 s</option>
+                    <option value="3000">3 s</option>
+                </select>
+            </label>
+            <label class="flex items-center gap-2 font-semibold">Puntero:
+                <select id="set-cursor" class="border-2 rounded p-1 font-normal cursor-pointer">
+                    <option value="halo">Halo suave</option>
+                    <option value="dot">Punto rojo</option>
+                    <option value="hidden">Oculto (solo resaltar botón)</option>
+                </select>
+            </label>
         </div>
     </div>
 
@@ -456,13 +490,59 @@
             startCalibration();
         });
 
-        // === LÓGICA DE DWELL (FIJACIÓN) ===
-        const DWELL_TIME = 1500;
-        const SMOOTH_N = 6;          // promedio de las últimas N predicciones
-        const recent = [];
-        let currentTarget = null;
-        let dwellStartTime = 0;
+        // === AJUSTES DE CONTROL (se guardan en el navegador) ===
+        // Estabilidad: cuánto se filtra el temblor de la mirada.
+        const STABILITY = {
+            baja:  { window: 6,  alpha: 0.35, deadzone: 25, magnet: 60,  switchDelay: 150, grace: 300 },
+            media: { window: 10, alpha: 0.20, deadzone: 45, magnet: 120, switchDelay: 300, grace: 600 },
+            alta:  { window: 16, alpha: 0.10, deadzone: 70, magnet: 200, switchDelay: 450, grace: 900 }
+        };
+        const settings = { stability: 'media', dwell: 2000, cursor: 'halo' };
+        try { Object.assign(settings, JSON.parse(localStorage.getItem('tobii-settings') || '{}')); } catch (e) {}
+
+        function saveSettings() {
+            try { localStorage.setItem('tobii-settings', JSON.stringify(settings)); } catch (e) {}
+            applyCursorStyle();
+        }
+
+        const selStab = document.getElementById('set-stability');
+        const selDwell = document.getElementById('set-dwell');
+        const selCursor = document.getElementById('set-cursor');
+        selStab.value = settings.stability;
+        selDwell.value = String(settings.dwell);
+        selCursor.value = settings.cursor;
+        selStab.addEventListener('change', () => { settings.stability = selStab.value; saveSettings(); });
+        selDwell.addEventListener('change', () => { settings.dwell = parseInt(selDwell.value, 10); saveSettings(); });
+        selCursor.addEventListener('change', () => { settings.cursor = selCursor.value; saveSettings(); });
+
         const cursor = document.getElementById('gaze-cursor');
+        function applyCursorStyle() {
+            cursor.classList.remove('cursor-halo', 'cursor-dot', 'cursor-hidden');
+            cursor.classList.add('cursor-' + settings.cursor);
+        }
+        applyCursorStyle();
+
+        // === LÓGICA DE DWELL (FIJACIÓN) ===
+        // 1) Filtro: mediana de las últimas N lecturas (descarta saltos) + suavizado exponencial.
+        // 2) Zona muerta: el puntero no se mueve por desplazamientos pequeños.
+        // 3) Imán: se elige el botón MÁS CERCANO (aunque la mirada caiga un poco afuera).
+        // 4) Histéresis: para cambiar de botón, la mirada debe quedarse un rato en el nuevo.
+        // 5) Tolerancia: si la mirada se escapa un instante, la barra se pausa en vez de reiniciarse.
+        const raw = [];
+        let smooth = null;        // punto filtrado
+        let shown = null;         // punto mostrado (con zona muerta)
+        let currentTarget = null;
+        let dwellAccum = 0;       // ms acumulados sobre el botón actual
+        let lastTick = 0;
+        let lastOnTarget = 0;     // última vez que la mirada estuvo en el botón actual
+        let candidate = null, candidateSince = 0;
+        let cooldownUntil = 0;
+
+        function median(arr) {
+            const s = [...arr].sort((a, b) => a - b);
+            const m = Math.floor(s.length / 2);
+            return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+        }
 
         function resetDwell() {
             if (currentTarget) {
@@ -471,49 +551,86 @@
                 if (p) p.style.width = '0%';
             }
             currentTarget = null;
+            candidate = null;
+            dwellAccum = 0;
+        }
+
+        // Botón visible más cercano al punto (distancia 0 si está adentro)
+        function nearestTarget(x, y, maxDist) {
+            let best = null, bestD = Infinity;
+            document.querySelectorAll('.gaze-target').forEach(el => {
+                if (!el.offsetParent) return; // oculto
+                const r = el.getBoundingClientRect();
+                const dx = Math.max(r.left - x, 0, x - r.right);
+                const dy = Math.max(r.top - y, 0, y - r.bottom);
+                const d = Math.hypot(dx, dy);
+                if (d < bestD) { bestD = d; best = el; }
+            });
+            return bestD <= maxDist ? best : null;
         }
 
         function handleGaze(data) {
             if (!data) return;
+            const cfg = STABILITY[settings.stability] || STABILITY.media;
+            const now = performance.now();
+            const dt = lastTick ? Math.min(now - lastTick, 200) : 0;
+            lastTick = now;
 
-            recent.push({ x: data.x, y: data.y });
-            if (recent.length > SMOOTH_N) recent.shift();
-            let x = recent.reduce((s, p) => s + p.x, 0) / recent.length;
-            let y = recent.reduce((s, p) => s + p.y, 0) / recent.length;
+            // --- Filtro ---
+            raw.push({ x: data.x, y: data.y });
+            while (raw.length > cfg.window) raw.shift();
+            const mx = median(raw.map(p => p.x));
+            const my = median(raw.map(p => p.y));
+            if (!smooth) smooth = { x: mx, y: my };
+            smooth.x += cfg.alpha * (mx - smooth.x);
+            smooth.y += cfg.alpha * (my - smooth.y);
 
-            x = Math.max(0, Math.min(window.innerWidth - 1, x));
-            y = Math.max(0, Math.min(window.innerHeight - 1, y));
-
-            cursor.style.transform = `translate(${x - 15}px, ${y - 15}px)`;
+            // --- Zona muerta ---
+            if (!shown || Math.hypot(smooth.x - shown.x, smooth.y - shown.y) > cfg.deadzone) {
+                shown = { x: smooth.x, y: smooth.y };
+            }
+            const x = Math.max(0, Math.min(window.innerWidth - 1, shown.x));
+            const y = Math.max(0, Math.min(window.innerHeight - 1, shown.y));
+            cursor.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`;
 
             // Durante la calibración no se activan botones por mirada
             if (!screens.cal.classList.contains('hidden')) return;
+            if (now < cooldownUntil) return;
 
-            // El cursor tiene pointer-events:none, así que no tapa a elementFromPoint
-            const elementUnder = document.elementFromPoint(x, y);
-            const target = elementUnder ? elementUnder.closest('.gaze-target') : null;
-            const now = performance.now();
+            const target = nearestTarget(x, y, cfg.magnet);
 
-            if (target !== currentTarget) {
+            if (currentTarget && target === currentTarget) {
+                lastOnTarget = now;
+                candidate = null;
+                dwellAccum += dt;
+            } else {
+                // ¿La mirada se escapó solo un instante? -> pausa, no reinicia
+                if (currentTarget && now - lastOnTarget < cfg.grace && target !== candidate) {
+                    candidate = target; candidateSince = now;
+                    return;
+                }
+                // Cambiar de botón solo si el nuevo se sostiene un tiempo (histéresis)
+                if (target !== candidate) { candidate = target; candidateSince = now; return; }
+                if (now - candidateSince < cfg.switchDelay && currentTarget) return;
+
                 resetDwell();
                 currentTarget = target;
                 if (currentTarget) {
                     currentTarget.classList.add('gaze-active');
-                    dwellStartTime = now;
+                    lastOnTarget = now;
                 }
-            } else if (currentTarget) {
-                const elapsed = now - dwellStartTime;
-                const progress = Math.min((elapsed / DWELL_TIME) * 100, 100);
-                const progressEl = currentTarget.querySelector('.dwell-progress');
-                if (progressEl) progressEl.style.width = `${progress}%`;
+                return;
+            }
 
-                if (elapsed >= DWELL_TIME) {
-                    const t = currentTarget;
-                    resetDwell();
-                    executeAction(t);
-                    // Pequeña pausa para no disparar dos veces el mismo botón
-                    dwellStartTime = now + 600;
-                }
+            const progress = Math.min((dwellAccum / settings.dwell) * 100, 100);
+            const progressEl = currentTarget.querySelector('.dwell-progress');
+            if (progressEl) progressEl.style.width = `${progress}%`;
+
+            if (dwellAccum >= settings.dwell) {
+                const t = currentTarget;
+                resetDwell();
+                executeAction(t);
+                cooldownUntil = now + 1000; // evita selecciones dobles
             }
         }
 
