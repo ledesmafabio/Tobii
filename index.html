@@ -231,14 +231,22 @@
             webgazer.showVideoPreview(true).showPredictionPoints(true);
         });
 
-        function calibrate(btn) {
-            btn.style.backgroundColor = '#16a34a'; // Cambia a verde
+       function calibrate(btn) {
+            btn.style.backgroundColor = '#16a34a';
             btn.disabled = true;
             calClicks++;
             
             if (calClicks >= 5) {
-                // Ocultar video de calibración y punto de predicción interno
-                webgazer.showVideoPreview(false).showPredictionPoints(false);
+                try {
+                    // Lo separamos para evitar errores de encadenamiento en esta versión
+                    if (typeof webgazer.showVideoPreview === 'function') webgazer.showVideoPreview(false);
+                    if (typeof webgazer.showPredictionPoints === 'function') webgazer.showPredictionPoints(false);
+                } catch (e) {
+                    console.warn("Aviso de WebGazer:", e);
+                }
+
+                // Forzamos el ocultamiento de la pantalla de calibración y mostramos el menú
+                document.getElementById('screen-calibration').classList.add('hidden');
                 document.getElementById('gaze-cursor').style.display = 'block';
                 showScreen('menu');
             }
