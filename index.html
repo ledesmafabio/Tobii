@@ -5,40 +5,39 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tobii - Simulador de Comunicación por Rastreo Ocular</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/webgazer@2.0.1/dist/webgazer.min.js"></script>
+    <!-- WebGazer se carga dinámicamente (con respaldo) desde el script de abajo -->
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; user-select: none; }
-        
+
         /* Cursor ocular */
         #gaze-cursor {
             position: fixed;
+            left: 0; top: 0;
             width: 30px;
             height: 30px;
             border-radius: 50%;
             background-color: rgba(255, 0, 0, 0.7);
             border: 2px solid white;
-            pointer-events: none;
+            pointer-events: none;   /* no bloquea elementFromPoint */
             z-index: 9999;
             display: none;
-            transition: transform 0.1s ease;
             box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            will-change: transform;
         }
 
-        /* Tarjetas interactivas - Añadido cursor-pointer para el mouse */
         .gaze-target {
             transition: all 0.3s ease;
             position: relative;
             overflow: hidden;
-            cursor: pointer; 
+            cursor: pointer;
         }
 
-        /* Barra de progreso de fijación de mirada */
         .dwell-progress {
             position: absolute;
             bottom: 0;
             left: 0;
             height: 8px;
-            background-color: #4ade80; /* Verde Tailwind */
+            background-color: #4ade80;
             width: 0%;
             transition: width 0.1s linear;
         }
@@ -46,10 +45,10 @@
         .gaze-active {
             transform: scale(1.05);
             box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-            border-color: #3b82f6; /* Azul */
+            border-color: #3b82f6;
         }
 
-        /* SOBRESCRITURA EXTREMA DE WEBGAZER: Miniatura de la cámara */
+        /* Miniatura de la cámara (contenedor que crea WebGazer) */
         #webgazerVideoContainer {
             position: fixed !important;
             bottom: 20px !important;
@@ -62,7 +61,7 @@
             overflow: hidden !important;
             border: 4px solid #cbd5e1 !important;
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5) !important;
-            z-index: 999999 !important; /* Llevado al frente absoluto */
+            z-index: 999999 !important;
             display: block !important;
             opacity: 0.9 !important;
             pointer-events: none !important;
@@ -70,16 +69,42 @@
         }
 
         #webgazerVideoFeed {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
             width: 100% !important;
             height: 100% !important;
             object-fit: cover !important;
             display: block !important;
         }
 
-        /* Ocultar la máscara verde facial */
-        #webgazerFaceOverlay, #webgazerFaceFeedbackBox {
+        /* El recuadro de encuadre facial se deja visible: ayuda a ubicar la cara */
+        #webgazerFaceFeedbackBox {
             display: none !important;
         }
+        #webgazerFaceOverlay {
+            position: absolute !important;
+            top: 0 !important; left: 0 !important;
+            width: 100% !important; height: 100% !important;
+        }
+
+        /* Punto rojo propio de WebGazer: usamos nuestro cursor */
+        #webgazerGazeDot { display: none !important; }
+
+        .cal-point {
+            width: 32px; height: 32px;
+            border-radius: 9999px;
+            background-color: #ef4444;
+            position: absolute;
+            transform: translate(-50%, -50%);
+            pointer-events: auto;
+            cursor: pointer;
+            color: white;
+            font-weight: bold;
+            font-size: 12px;
+            box-shadow: 0 0 0 4px rgba(239,68,68,0.25);
+        }
+        .cal-point.done { background-color: #16a34a; box-shadow: 0 0 0 4px rgba(22,163,74,0.25); }
     </style>
 </head>
 <body class="bg-slate-100 h-screen w-screen flex flex-col items-center justify-center">
@@ -88,28 +113,26 @@
 
     <!-- PANTALLA DE CALIBRACIÓN -->
     <div id="screen-calibration" class="absolute inset-0 bg-white z-50 flex flex-col items-center justify-center p-8">
-        <h1 class="text-4xl font-bold text-slate-800 mb-6 text-center">Calibración del Sistema</h1>
-        <p class="text-xl text-slate-600 mb-8 text-center max-w-2xl">
-            Sigue el punto rojo con la mirada y haz clic en los botones. 
-            <br><span class="text-sm text-slate-500">(Si la cámara falla, puedes usar el modo desarrollador para probar con el mouse)</span>
-        </p>
-        
-        <div class="flex gap-4">
-            <button id="btn-start-cal" class="px-8 py-4 bg-blue-600 text-white rounded-2xl text-2xl font-bold shadow-lg hover:bg-blue-700 transition cursor-pointer">
-                Iniciar Cámara (WebGazer)
-            </button>
-            <button id="btn-skip-cal" class="px-8 py-4 bg-slate-200 text-slate-700 rounded-2xl text-xl font-bold shadow-lg hover:bg-slate-300 transition cursor-pointer">
-                Saltar y probar con Mouse
-            </button>
+        <div id="cal-intro" class="flex flex-col items-center">
+            <h1 class="text-4xl font-bold text-slate-800 mb-6 text-center">Calibración del Sistema</h1>
+            <p class="text-xl text-slate-600 mb-8 text-center max-w-2xl">
+                Permití el acceso a la cámara. Luego mirá fijo cada punto rojo y hacé clic sobre él
+                <b>5 veces</b> (sin dejar de mirarlo) hasta que se ponga verde.
+                <br><span class="text-sm text-slate-500">(Si la cámara falla, podés probar con el mouse)</span>
+            </p>
+
+            <div class="flex gap-4">
+                <button id="btn-start-cal" class="px-8 py-4 bg-blue-600 text-white rounded-2xl text-2xl font-bold shadow-lg hover:bg-blue-700 transition cursor-pointer">
+                    Iniciar Cámara (WebGazer)
+                </button>
+                <button id="btn-skip-cal" class="px-8 py-4 bg-slate-200 text-slate-700 rounded-2xl text-xl font-bold shadow-lg hover:bg-slate-300 transition cursor-pointer">
+                    Saltar y probar con Mouse
+                </button>
+            </div>
+            <p id="cal-status" class="mt-6 text-lg text-slate-500 text-center max-w-2xl"></p>
         </div>
 
-        <div id="cal-points" class="hidden absolute inset-0 w-full h-full pointer-events-none">
-            <button class="cal-point absolute top-10 left-10 w-8 h-8 bg-red-500 rounded-full cursor-pointer pointer-events-auto" onclick="calibrate(this)"></button>
-            <button class="cal-point absolute top-10 right-10 w-8 h-8 bg-red-500 rounded-full cursor-pointer pointer-events-auto" onclick="calibrate(this)"></button>
-            <button class="cal-point absolute bottom-10 left-10 w-8 h-8 bg-red-500 rounded-full cursor-pointer pointer-events-auto" onclick="calibrate(this)"></button>
-            <button class="cal-point absolute bottom-10 right-10 w-8 h-8 bg-red-500 rounded-full cursor-pointer pointer-events-auto" onclick="calibrate(this)"></button>
-            <button class="cal-point absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-red-500 rounded-full cursor-pointer pointer-events-auto" onclick="calibrate(this)"></button>
-        </div>
+        <div id="cal-points" class="hidden absolute inset-0 w-full h-full pointer-events-none"></div>
     </div>
 
     <!-- PANTALLA PRINCIPAL (MENÚ) -->
@@ -127,41 +150,42 @@
                 <div class="dwell-progress"></div>
             </div>
         </div>
-        
+
         <div class="mt-10 flex items-center gap-4 bg-white p-4 rounded-xl shadow border-2 border-slate-200">
             <label class="text-xl font-semibold">Tipo de Voz:</label>
             <select id="voice-select" class="border-2 rounded p-2 text-lg outline-none cursor-pointer">
                 <option value="adult">Voz Adulta</option>
                 <option value="child">Voz Aniñada (Tono agudo)</option>
             </select>
+            <button id="btn-recal" class="ml-4 px-4 py-2 bg-slate-200 rounded-lg font-semibold hover:bg-slate-300 hidden">Recalibrar</button>
         </div>
     </div>
 
     <!-- PANTALLA DE PICTOGRAMAS -->
     <div id="screen-picto" class="hidden w-full h-full flex flex-col p-10">
-        <div class="flex justify-between items-center mb-6 pl-72"> <!-- Desplazado para esquivar cámara -->
+        <div class="flex justify-between items-center mb-6 pl-72">
             <h2 class="text-4xl font-bold text-slate-800">Acciones</h2>
             <div class="gaze-target px-6 py-3 bg-red-100 text-red-700 rounded-xl font-bold border-2 border-red-300 hover:bg-red-200" data-action="back-menu">
                 Volver al Menú
                 <div class="dwell-progress"></div>
             </div>
         </div>
-        
+
         <div class="grid grid-cols-4 gap-6 flex-1 pl-72">
             <div class="gaze-target bg-white rounded-2xl border-4 border-slate-200 shadow-sm flex flex-col p-4 items-center justify-center hover:border-blue-400" data-speech="Quiero trabajar">
-                <img src="img/pictogramas/pic_trabajar.jpg" alt="Trabajar" class="h-32 object-contain mb-2 pointer-events-none rounded" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\'><rect width=\'100\' height=\'100\' fill=\'%23eee\'/><text x=\'50%\' y=\'50%\' dominant-baseline=\'middle\' text-anchor=\'middle\'>IMG</text></svg>'">
+                <img src="img/pictogramas/pic_trabajar.jpg" alt="Trabajar" class="h-32 object-contain mb-2 pointer-events-none rounded" onerror="imgFallback(this)">
                 <span class="text-xl font-bold">Trabajar</span>
                 <div class="dwell-progress"></div>
             </div>
-            
+
             <div class="gaze-target bg-white rounded-2xl border-4 border-slate-200 shadow-sm flex flex-col p-4 items-center justify-center hover:border-blue-400" data-speech="Necesito ir al baño">
-                <img src="img/pictogramas/pic_bano.jpg" alt="Ir al baño" class="h-32 object-contain mb-2 pointer-events-none rounded" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\'><rect width=\'100\' height=\'100\' fill=\'%23eee\'/><text x=\'50%\' y=\'50%\' dominant-baseline=\'middle\' text-anchor=\'middle\'>IMG</text></svg>'">
+                <img src="img/pictogramas/pic_bano.jpg" alt="Ir al baño" class="h-32 object-contain mb-2 pointer-events-none rounded" onerror="imgFallback(this)">
                 <span class="text-xl font-bold">Ir al baño</span>
                 <div class="dwell-progress"></div>
             </div>
-            
+
             <div class="gaze-target bg-white rounded-2xl border-4 border-slate-200 shadow-sm flex flex-col p-4 items-center justify-center hover:border-blue-400" data-speech="Quiero jugar a la pelota">
-                <img src="img/pictogramas/pic_pelota.jpg" alt="Pelota" class="h-32 object-contain mb-2 pointer-events-none rounded" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\'><rect width=\'100\' height=\'100\' fill=\'%23eee\'/><text x=\'50%\' y=\'50%\' dominant-baseline=\'middle\' text-anchor=\'middle\'>IMG</text></svg>'">
+                <img src="img/pictogramas/pic_pelota.jpg" alt="Pelota" class="h-32 object-contain mb-2 pointer-events-none rounded" onerror="imgFallback(this)">
                 <span class="text-xl font-bold">Pelota</span>
                 <div class="dwell-progress"></div>
             </div>
@@ -196,46 +220,57 @@
             </div>
         </div>
 
-        <div class="grid grid-cols-7 gap-4 flex-1 pl-72">
-            <script>
-                const letras = "ABCDEFGHIJKLMNÑOPQRSTUVWXYZ".split('');
-                letras.forEach(letra => {
-                    document.write(`
-                        <div class="gaze-target bg-white rounded-xl border-2 border-slate-300 flex items-center justify-center shadow-sm hover:bg-slate-50" data-letter="${letra}">
-                            <img src="img/letras/letra_${letra.toLowerCase()}.jpg" class="h-16 pointer-events-none rounded" onerror="this.style.display='none'; this.nextElementSibling.style.display='block'">
-                            <span class="text-4xl font-bold hidden">${letra}</span>
-                            <div class="dwell-progress"></div>
-                        </div>
-                    `);
-                });
-            </script>
-        </div>
+        <div id="alpha-grid" class="grid grid-cols-7 gap-4 flex-1 pl-72"></div>
     </div>
 
     <script>
+        // === UTILIDADES ===
+        function imgFallback(img) {
+            img.onerror = null;
+            img.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%23eee'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle'>IMG</text></svg>";
+        }
+
+        const statusEl = document.getElementById('cal-status');
+        function setStatus(msg, isError = false) {
+            statusEl.textContent = msg;
+            statusEl.className = 'mt-6 text-lg text-center max-w-2xl ' + (isError ? 'text-red-600 font-semibold' : 'text-slate-500');
+        }
+
+        // === ABECEDARIO (sin document.write) ===
+        const alphaGrid = document.getElementById('alpha-grid');
+        "ABCDEFGHIJKLMNÑOPQRSTUVWXYZ".split('').forEach(letra => {
+            const div = document.createElement('div');
+            div.className = 'gaze-target bg-white rounded-xl border-2 border-slate-300 flex items-center justify-center shadow-sm hover:bg-slate-50';
+            div.dataset.letter = letra;
+            div.innerHTML = `
+                <img src="img/letras/letra_${letra.toLowerCase()}.jpg" class="h-16 pointer-events-none rounded">
+                <span class="text-4xl font-bold hidden">${letra}</span>
+                <div class="dwell-progress"></div>`;
+            div.querySelector('img').onerror = function () {
+                this.style.display = 'none';
+                this.nextElementSibling.style.display = 'block';
+            };
+            alphaGrid.appendChild(div);
+        });
+
         // === SÍNTESIS DE VOZ ===
         const synth = window.speechSynthesis;
         let voices = [];
-        
-        synth.onvoiceschanged = () => {
-            voices = synth.getVoices().filter(v => v.lang.startsWith('es'));
-        };
+        function loadVoices() { voices = synth.getVoices().filter(v => v.lang.startsWith('es')); }
+        loadVoices();
+        synth.onvoiceschanged = loadVoices;
 
         function speak(text) {
-            if (text.trim() === '') return;
+            if (!text || text.trim() === '') return;
             if (synth.speaking) synth.cancel();
-            
             const utterance = new SpeechSynthesisUtterance(text);
             const voiceType = document.getElementById('voice-select').value;
-            
             if (voices.length > 0) {
                 utterance.voice = voices.find(v => v.name.includes('Google') || v.name.includes('Microsoft')) || voices[0];
             }
-            
             utterance.lang = 'es-ES';
             utterance.rate = 0.9;
             utterance.pitch = voiceType === 'child' ? 1.8 : 1.0;
-            
             synth.speak(utterance);
         }
 
@@ -246,111 +281,238 @@
             picto: document.getElementById('screen-picto'),
             alpha: document.getElementById('screen-alpha')
         };
-
         function showScreen(name) {
             Object.values(screens).forEach(s => s.classList.add('hidden'));
             screens[name].classList.remove('hidden');
+            resetDwell();
         }
 
-        // === INICIALIZACIÓN MODO MOUSE (FALLBACK) ===
-        // Agrega evento clic a todos los elementos interactivos
+        // === MODO MOUSE (FALLBACK) ===
         document.querySelectorAll('.gaze-target').forEach(target => {
-            target.addEventListener('click', function() {
-                // Efecto visual rápido
+            target.addEventListener('click', function () {
                 this.classList.add('gaze-active');
                 setTimeout(() => this.classList.remove('gaze-active'), 200);
-                
-                // Ejecutar la misma lógica que usaría el ojo
                 executeAction(this);
             });
         });
 
-        // Botón para saltar calibración y probar con mouse
-        document.getElementById('btn-skip-cal').addEventListener('click', () => {
-            showScreen('menu');
-        });
+        document.getElementById('btn-skip-cal').addEventListener('click', () => showScreen('menu'));
 
-        // === CALIBRACIÓN Y ARRANQUE DE WEBGAZER ===
-        let calClicks = 0;
-        document.getElementById('btn-start-cal').addEventListener('click', () => {
-            document.getElementById('btn-start-cal').classList.add('hidden');
-            document.getElementById('btn-skip-cal').classList.add('hidden');
-            document.getElementById('cal-points').classList.remove('hidden');
-            
-            webgazer.setRegression('ridge')
-                .setGazeListener(handleGaze)
-                .begin();
-            
+        // === CARGA DE WEBGAZER (con respaldo) ===
+        // Antes se usaba webgazer@2.0.1: su begin() terminaba sin abrir la cámara ni crear
+        // el video, y no tiene showVideoPreview(). Se usa la versión actual (3.x).
+        const WEBGAZER_SOURCES = [
+            'https://webgazer.cs.brown.edu/webgazer.js',
+            'https://cdn.jsdelivr.net/npm/webgazer@3.5.3/dist/webgazer.js'
+        ];
+        // WebGazer 3.x busca el modelo facial de MediaPipe en "./mediapipe/face_mesh"
+        // (carpeta que no existe en GitHub Pages). Se lo apunta a un CDN con CORS.
+        const FACE_MESH_PATH = 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619';
+
+        function loadScript(src) {
+            return new Promise((resolve, reject) => {
+                const s = document.createElement('script');
+                s.src = src;
+                s.async = true;
+                s.onload = () => (window.webgazer ? resolve() : reject(new Error('webgazer no definido')));
+                s.onerror = () => reject(new Error('No se pudo cargar ' + src));
+                document.head.appendChild(s);
+            });
+        }
+
+        async function ensureWebGazer() {
+            if (window.webgazer) return;
+            for (const src of WEBGAZER_SOURCES) {
+                try { await loadScript(src); console.log('WebGazer cargado desde', src); return; }
+                catch (e) { console.warn(e.message); }
+            }
+            throw new Error('No se pudo descargar la librería WebGazer.');
+        }
+
+        // === ARRANQUE DE CÁMARA + CALIBRACIÓN ===
+        let gazeRunning = false;
+        const startBtn = document.getElementById('btn-start-cal');
+
+        startBtn.addEventListener('click', async () => {
+            if (!window.isSecureContext) {
+                setStatus('La cámara solo funciona en HTTPS o localhost. Abrí el sitio con https://', true);
+                return;
+            }
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                setStatus('Este navegador no permite acceder a la cámara. Probá con Chrome o Edge.', true);
+                return;
+            }
+
+            startBtn.disabled = true;
+            startBtn.classList.add('opacity-50');
+            setStatus('Cargando librería de rastreo ocular…');
+
             try {
-                if (typeof webgazer.showVideoPreview === 'function') webgazer.showVideoPreview(true);
-                if (typeof webgazer.showPredictionPoints === 'function') webgazer.showPredictionPoints(true);
-            } catch (e) {
-                console.log("WebGazer control visual interno:", e.message);
+                await ensureWebGazer();
+                setStatus('Iniciando cámara y modelo facial (puede tardar unos segundos)…');
+
+                webgazer.params.faceMeshSolutionPath = FACE_MESH_PATH;
+                webgazer.saveDataAcrossSessions(false); // evita arrastrar calibraciones viejas
+                webgazer.setRegression('ridge')
+                    .setGazeListener(handleGaze)
+                    .showVideoPreview(true)
+                    .showFaceOverlay(true)
+                    .showFaceFeedbackBox(false)
+                    .showPredictionPoints(false)
+                    .applyKalmanFilter(true);
+
+                await webgazer.begin(); // ¡hay que esperar la promesa!
+                webgazer.clearData();
+                gazeRunning = true;
+
+                fixVideoThumbnail();
+                startCalibration();
+            } catch (err) {
+                console.error(err);
+                const msg = (err && err.name === 'NotAllowedError')
+                    ? 'Permiso de cámara denegado. Habilitalo en el candado de la barra de direcciones y recargá.'
+                    : (err && err.name === 'NotFoundError')
+                        ? 'No se encontró ninguna cámara conectada.'
+                        : 'Error al iniciar el rastreo: ' + (err && err.message ? err.message : err);
+                setStatus(msg, true);
+                startBtn.disabled = false;
+                startBtn.classList.remove('opacity-50');
             }
         });
 
-        function calibrate(btn) {
-            btn.style.backgroundColor = '#16a34a';
-            btn.disabled = true;
-            calClicks++;
-            
-            if (calClicks >= 5) {
-                try {
-                    if (typeof webgazer.showPredictionPoints === 'function') webgazer.showPredictionPoints(false);
-                } catch (e) {}
+        // Asegura que la miniatura se vea aunque WebGazer haya puesto estilos en línea
+        function fixVideoThumbnail() {
+            try { webgazer.setVideoViewerSize(240, 180); } catch (e) {}
+            const container = document.getElementById('webgazerVideoContainer');
+            const video = document.getElementById('webgazerVideoFeed');
+            if (container && container.parentElement !== document.body) document.body.appendChild(container);
+            if (video) {
+                video.muted = true;
+                video.setAttribute('playsinline', '');
+                const p = video.play && video.play();
+                if (p && p.catch) p.catch(() => {});
+            }
+            if (!container) console.warn('WebGazer no creó #webgazerVideoContainer');
+        }
 
-                document.getElementById('screen-calibration').classList.add('hidden');
-                document.getElementById('gaze-cursor').style.display = 'block';
-                showScreen('menu');
+        // 9 puntos, 5 clics cada uno. WebGazer aprende de cada clic (mirada = posición del clic).
+        const CAL_CLICKS_PER_POINT = 5;
+        const CAL_POSITIONS = [
+            [10, 10], [50, 10], [90, 10],
+            [10, 50], [50, 50], [90, 50],
+            [10, 90], [50, 90], [90, 90]
+        ];
+        let calDone = 0;
+
+        function startCalibration() {
+            calDone = 0;
+            screens.cal.classList.remove('hidden');
+            document.getElementById('cal-intro').classList.add('hidden');
+            const wrap = document.getElementById('cal-points');
+            wrap.innerHTML = '';
+            wrap.classList.remove('hidden');
+            webgazer.addMouseEventListeners(); // durante la calibración, los clics entrenan el modelo
+            document.getElementById('gaze-cursor').style.display = 'block';
+
+            CAL_POSITIONS.forEach(([x, y]) => {
+                const b = document.createElement('button');
+                b.className = 'cal-point';
+                b.style.left = x + '%';
+                b.style.top = y + '%';
+                b.dataset.clicks = '0';
+                b.textContent = CAL_CLICKS_PER_POINT;
+                b.addEventListener('click', () => calibrate(b));
+                wrap.appendChild(b);
+            });
+        }
+
+        function calibrate(btn) {
+            if (btn.classList.contains('done')) return;
+            const clicks = parseInt(btn.dataset.clicks, 10) + 1;
+            btn.dataset.clicks = clicks;
+            btn.textContent = CAL_CLICKS_PER_POINT - clicks;
+            btn.style.opacity = 0.4 + 0.6 * (clicks / CAL_CLICKS_PER_POINT);
+
+            if (clicks >= CAL_CLICKS_PER_POINT) {
+                btn.classList.add('done');
+                btn.textContent = '✓';
+                calDone++;
+                if (calDone >= CAL_POSITIONS.length) finishCalibration();
             }
         }
 
+        function finishCalibration() {
+            document.getElementById('cal-points').classList.add('hidden');
+            document.getElementById('cal-intro').classList.remove('hidden');
+            // Tras calibrar, el mouse deja de entrenar el modelo (si no, mover el mouse "ensucia" la predicción)
+            webgazer.removeMouseEventListeners();
+            document.getElementById('btn-recal').classList.remove('hidden');
+            showScreen('menu');
+        }
+
+        document.getElementById('btn-recal').addEventListener('click', () => {
+            if (!gazeRunning) return;
+            webgazer.clearData();
+            startCalibration();
+        });
+
         // === LÓGICA DE DWELL (FIJACIÓN) ===
-        const DWELL_TIME = 1500; 
+        const DWELL_TIME = 1500;
+        const SMOOTH_N = 6;          // promedio de las últimas N predicciones
+        const recent = [];
         let currentTarget = null;
         let dwellStartTime = 0;
+        const cursor = document.getElementById('gaze-cursor');
 
-        function handleGaze(data, elapsedTime) {
+        function resetDwell() {
+            if (currentTarget) {
+                currentTarget.classList.remove('gaze-active');
+                const p = currentTarget.querySelector('.dwell-progress');
+                if (p) p.style.width = '0%';
+            }
+            currentTarget = null;
+        }
+
+        function handleGaze(data) {
             if (!data) return;
 
-            const x = data.x;
-            const y = data.y;
+            recent.push({ x: data.x, y: data.y });
+            if (recent.length > SMOOTH_N) recent.shift();
+            let x = recent.reduce((s, p) => s + p.x, 0) / recent.length;
+            let y = recent.reduce((s, p) => s + p.y, 0) / recent.length;
 
-            const cursor = document.getElementById('gaze-cursor');
-            cursor.style.left = `${x - 15}px`;
-            cursor.style.top = `${y - 15}px`;
+            x = Math.max(0, Math.min(window.innerWidth - 1, x));
+            y = Math.max(0, Math.min(window.innerHeight - 1, y));
 
-            cursor.style.display = 'none';
+            cursor.style.transform = `translate(${x - 15}px, ${y - 15}px)`;
+
+            // Durante la calibración no se activan botones por mirada
+            if (!screens.cal.classList.contains('hidden')) return;
+
+            // El cursor tiene pointer-events:none, así que no tapa a elementFromPoint
             const elementUnder = document.elementFromPoint(x, y);
-            cursor.style.display = 'block';
-
             const target = elementUnder ? elementUnder.closest('.gaze-target') : null;
+            const now = performance.now();
 
             if (target !== currentTarget) {
-                if (currentTarget) {
-                    currentTarget.classList.remove('gaze-active');
-                    const progressEl = currentTarget.querySelector('.dwell-progress');
-                    if (progressEl) progressEl.style.width = '0%';
-                }
-                
+                resetDwell();
                 currentTarget = target;
-                
                 if (currentTarget) {
                     currentTarget.classList.add('gaze-active');
-                    dwellStartTime = elapsedTime;
+                    dwellStartTime = now;
                 }
             } else if (currentTarget) {
-                const elapsed = elapsedTime - dwellStartTime;
+                const elapsed = now - dwellStartTime;
                 const progress = Math.min((elapsed / DWELL_TIME) * 100, 100);
-                
                 const progressEl = currentTarget.querySelector('.dwell-progress');
                 if (progressEl) progressEl.style.width = `${progress}%`;
 
                 if (elapsed >= DWELL_TIME) {
-                    executeAction(currentTarget);
-                    if (progressEl) progressEl.style.width = '0%';
-                    currentTarget.classList.remove('gaze-active');
-                    currentTarget = null; 
+                    const t = currentTarget;
+                    resetDwell();
+                    executeAction(t);
+                    // Pequeña pausa para no disparar dos veces el mismo botón
+                    dwellStartTime = now + 600;
                 }
             }
         }
@@ -364,25 +526,17 @@
                 if (action === 'mode-picto') showScreen('picto');
                 if (action === 'mode-alpha') { showScreen('alpha'); textConstructor.innerText = ''; }
                 if (action === 'back-menu') showScreen('menu');
-                
-                if (action === 'alpha-space') textConstructor.innerText += ' ';
+                if (action === 'alpha-space') textConstructor.innerText += ' ';
                 if (action === 'alpha-delete') textConstructor.innerText = textConstructor.innerText.slice(0, -1);
-                if (action === 'alpha-speak') speak(textConstructor.innerText);
-                
-                new Audio('data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU...').play().catch(()=>{});
+                if (action === 'alpha-speak') speak(textConstructor.innerText.replace(/ /g, ' '));
                 return;
             }
 
             const speechText = element.getAttribute('data-speech');
-            if (speechText) {
-                speak(speechText);
-                return;
-            }
+            if (speechText) { speak(speechText); return; }
 
             const letter = element.getAttribute('data-letter');
-            if (letter) {
-                textConstructor.innerText += letter;
-            }
+            if (letter) textConstructor.innerText += letter;
         }
     </script>
 </body>
