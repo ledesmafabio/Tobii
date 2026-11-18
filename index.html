@@ -3,431 +3,337 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tobii - Comunicación Aumentativa por Rastreo Ocular</title>
-    <!-- Tailwind CSS for styling -->
+    <title>Tobii - Simulador de Comunicación por Rastreo Ocular</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- WebGazer.js for Eye Tracking -->
-    <script src="https://webgazer.cs.brown.edu/webgazer.js"></script>
-    
+    <!-- Usamos la versión 2.0.1 para evitar errores 404 de MediaPipe en GitHub Pages -->
+    <script src="https://cdn.jsdelivr.net/npm/webgazer@2.0.1/dist/webgazer.min.js"></script>
     <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f8fafc; /* Slate 50 */
-            user-select: none; /* Prevent text selection while looking around */
-            overflow: hidden; /* Prevent scrolling to keep gaze accurate */
-        }
-
-        /* Custom gaze cursor */
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; user-select: none; }
+        
+        /* Cursor ocular */
         #gaze-cursor {
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 60px;
-            height: 60px;
+            width: 30px;
+            height: 30px;
             border-radius: 50%;
+            background-color: rgba(255, 0, 0, 0.7);
+            border: 2px solid white;
             pointer-events: none;
             z-index: 9999;
-            transform: translate(-50%, -50%);
             display: none;
-            transition: left 0.05s ease-out, top 0.05s ease-out;
+            transition: transform 0.1s ease;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
         }
 
-        /* Dwell animation ring */
-        .progress-ring__circle {
-            transition: stroke-dashoffset 0.1s linear;
-            transform: rotate(-90deg);
-            transform-origin: 50% 50%;
-        }
-
-        /* Hover effect for targets */
+        /* Tarjetas interactivas */
         .gaze-target {
-            transition: all 0.2s ease;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
         }
-        
-        /* Highlight when currently being dwelled upon */
-        .dwelling {
-            transform: scale(0.95);
-            box-shadow: 0 0 0 8px rgba(59, 130, 246, 0.5); /* Blue ring */
+
+        /* Barra de progreso de fijación de mirada */
+        .dwell-progress {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 8px;
+            background-color: #4ade80; /* Verde Tailwind */
+            width: 0%;
+            transition: width 0.1s linear;
         }
-        
-        .calibration-point.calibrated {
-            background-color: #10b981; /* Emerald 500 */
+
+        .gaze-active {
+            transform: scale(1.05);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            border-color: #3b82f6; /* Azul */
         }
     </style>
 </head>
-<body class="h-screen w-screen flex flex-col">
+<body class="bg-slate-100 h-screen w-screen flex flex-col items-center justify-center">
 
-    <!-- Custom Cursor -->
-    <div id="gaze-cursor">
-        <svg class="w-full h-full" viewBox="0 0 100 100">
-            <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(239, 68, 68, 0.3)" stroke-width="10" />
-            <!-- Circumference = 2 * pi * r = 2 * 3.1415 * 45 = 282.7 -->
-            <circle id="dwell-progress" class="progress-ring__circle" cx="50" cy="50" r="45" fill="none" stroke="#ef4444" stroke-width="10" stroke-dasharray="283" stroke-dashoffset="283" />
-        </svg>
-    </div>
+    <div id="gaze-cursor"></div>
 
-    <!-- SCREEN: INITIALIZATION -->
-    <div id="screen-init" class="absolute inset-0 flex flex-col items-center justify-center bg-white z-40">
-        <h1 class="text-5xl font-bold text-blue-600 mb-6">Tobii Web Simulator</h1>
-        <p class="text-xl text-gray-600 max-w-2xl text-center mb-8">
-            Sistema de comunicación aumentativa mediante rastreo ocular. 
-            Para comenzar, necesitamos acceso a tu cámara para mapear tu mirada.
+    <!-- PANTALLA DE CALIBRACIÓN -->
+    <div id="screen-calibration" class="absolute inset-0 bg-white z-50 flex flex-col items-center justify-center p-8">
+        <h1 class="text-4xl font-bold text-slate-800 mb-6 text-center">Calibración del Sistema</h1>
+        <p class="text-xl text-slate-600 mb-8 text-center max-w-2xl">
+            Sigue el punto rojo con la mirada. Haz clic en los botones de las esquinas y el centro para calibrar el modelo ocular.
+            Asegúrate de tener buena iluminación.
         </p>
-        <button id="btn-start" class="gaze-target bg-blue-600 text-white text-3xl font-bold py-6 px-12 rounded-2xl shadow-lg hover:bg-blue-700 transition-colors">
-            Iniciar Rastreo Ocular
+        <button id="btn-start-cal" class="px-8 py-4 bg-blue-600 text-white rounded-2xl text-2xl font-bold shadow-lg hover:bg-blue-700 transition">
+            Iniciar Calibración
         </button>
-    </div>
-
-    <!-- SCREEN: CALIBRATION -->
-    <div id="screen-calibration" class="absolute inset-0 bg-gray-100 z-30 hidden flex-col">
-        <div class="p-4 text-center text-xl font-bold text-gray-700 bg-white shadow">
-            Fija la vista y "haz clic" en los 9 puntos para calibrar el sistema. (Requiere mirar fijamente durante 2 segundos).
-        </div>
-        <div id="calibration-grid" class="flex-grow grid grid-cols-3 grid-rows-3 gap-4 p-10 place-items-center">
-            <!-- Injected via JS -->
+        <div id="cal-points" class="hidden absolute inset-0 w-full h-full">
+            <button class="cal-point absolute top-10 left-10 w-8 h-8 bg-red-500 rounded-full" onclick="calibrate(this)"></button>
+            <button class="cal-point absolute top-10 right-10 w-8 h-8 bg-red-500 rounded-full" onclick="calibrate(this)"></button>
+            <button class="cal-point absolute bottom-10 left-10 w-8 h-8 bg-red-500 rounded-full" onclick="calibrate(this)"></button>
+            <button class="cal-point absolute bottom-10 right-10 w-8 h-8 bg-red-500 rounded-full" onclick="calibrate(this)"></button>
+            <button class="cal-point absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-red-500 rounded-full" onclick="calibrate(this)"></button>
         </div>
     </div>
 
-    <!-- SCREEN: MAIN MENU -->
-    <div id="screen-menu" class="absolute inset-0 bg-blue-50 z-20 hidden flex-col items-center justify-center p-8">
-        <h2 class="text-4xl font-bold text-gray-800 mb-12">¿Qué quieres hacer?</h2>
-        
-        <div class="flex gap-8 w-full max-w-5xl h-64">
-            <button onclick="switchScreen('screen-pictograms')" class="gaze-target flex-1 bg-green-200 text-green-900 rounded-3xl shadow-xl flex flex-col items-center justify-center text-4xl font-bold hover:bg-green-300">
-                <span class="text-7xl mb-4">🖼️</span>
-                Pictogramas
-            </button>
-            <button onclick="switchScreen('screen-alphabet')" class="gaze-target flex-1 bg-yellow-200 text-yellow-900 rounded-3xl shadow-xl flex flex-col items-center justify-center text-4xl font-bold hover:bg-yellow-300">
-                <span class="text-7xl mb-4">🔤</span>
-                Abecedario
-            </button>
-        </div>
-
-        <div class="mt-12 p-6 bg-white rounded-2xl shadow flex items-center gap-6">
-            <span class="text-2xl font-semibold">Tipo de Voz:</span>
-            <button id="btn-voice-toggle" class="gaze-target bg-purple-100 text-purple-800 text-2xl font-bold py-4 px-8 rounded-xl border-4 border-purple-300">
-                🗣️ Adulto
-            </button>
-        </div>
-    </div>
-
-    <!-- SCREEN: PICTOGRAMS -->
-    <div id="screen-pictograms" class="absolute inset-0 bg-white z-20 hidden flex-col p-4">
-        <div class="flex justify-between items-center mb-4">
-            <button onclick="switchScreen('screen-menu')" class="gaze-target bg-gray-200 text-gray-800 text-2xl font-bold py-4 px-8 rounded-xl shadow">
-                ⬅️ Volver
-            </button>
-            <h2 class="text-3xl font-bold">Cosas que puedo hacer</h2>
-            <div class="w-32"></div> <!-- Spacer for centering -->
+    <!-- PANTALLA PRINCIPAL (MENÚ) -->
+    <div id="screen-menu" class="hidden w-full h-full flex flex-col items-center justify-center gap-10">
+        <h2 class="text-5xl font-bold text-slate-800">Selecciona el modo</h2>
+        <div class="flex gap-10 w-full max-w-4xl px-10">
+            <div class="gaze-target flex-1 h-80 bg-blue-100 rounded-3xl border-4 border-blue-300 flex flex-col items-center justify-center cursor-pointer shadow-md" data-action="mode-picto">
+                <span class="text-6xl mb-4">🖼️</span>
+                <span class="text-3xl font-bold text-blue-800">Pictogramas</span>
+                <div class="dwell-progress"></div>
+            </div>
+            <div class="gaze-target flex-1 h-80 bg-purple-100 rounded-3xl border-4 border-purple-300 flex flex-col items-center justify-center cursor-pointer shadow-md" data-action="mode-alpha">
+                <span class="text-6xl mb-4">🔤</span>
+                <span class="text-3xl font-bold text-purple-800">Abecedario</span>
+                <div class="dwell-progress"></div>
+            </div>
         </div>
         
-        <div class="flex-grow grid grid-cols-3 grid-rows-3 gap-4" id="pictogram-grid">
-            <!-- Populated via JS -->
+        <!-- Configuración de voz -->
+        <div class="mt-10 flex items-center gap-4 bg-white p-4 rounded-xl shadow">
+            <label class="text-xl font-semibold">Tipo de Voz:</label>
+            <select id="voice-select" class="border-2 rounded p-2 text-lg">
+                <option value="adult">Voz Adulta</option>
+                <option value="child">Voz Aniñada (Tono agudo)</option>
+            </select>
         </div>
     </div>
 
-    <!-- SCREEN: ALPHABET -->
-    <div id="screen-alphabet" class="absolute inset-0 bg-white z-20 hidden flex-col p-4">
-        <div class="flex justify-between items-center mb-4">
-            <button onclick="switchScreen('screen-menu')" class="gaze-target bg-gray-200 text-gray-800 text-xl font-bold py-4 px-8 rounded-xl shadow">
-                ⬅️ Volver
-            </button>
+    <!-- PANTALLA DE PICTOGRAMAS -->
+    <div id="screen-picto" class="hidden w-full h-full flex flex-col p-10">
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-4xl font-bold text-slate-800">Acciones</h2>
+            <div class="gaze-target px-6 py-3 bg-red-100 text-red-700 rounded-xl font-bold border-2 border-red-300" data-action="back-menu">
+                Volver al Menú
+                <div class="dwell-progress"></div>
+            </div>
+        </div>
+        
+        <div class="grid grid-cols-4 gap-6 flex-1">
+            <!-- Ejemplo de tarjetas utilizando las imágenes separadas -->
+            <div class="gaze-target bg-white rounded-2xl border-4 border-slate-200 shadow-sm flex flex-col p-4 items-center justify-center" data-speech="Quiero trabajar">
+                <img src="img/pictogramas/pic_trabajar.jpg" alt="Trabajar" class="h-32 object-contain mb-2 pointer-events-none rounded" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\'><rect width=\'100\' height=\'100\' fill=\'%23eee\'/><text x=\'50%\' y=\'50%\' dominant-baseline=\'middle\' text-anchor=\'middle\'>IMG</text></svg>'">
+                <span class="text-xl font-bold">Trabajar</span>
+                <div class="dwell-progress"></div>
+            </div>
             
-            <div class="flex-grow mx-6">
-                <div id="text-display" class="w-full bg-blue-50 border-4 border-blue-200 h-20 rounded-xl flex items-center px-4 text-4xl font-bold text-gray-800">
-                    <!-- Text goes here -->
+            <div class="gaze-target bg-white rounded-2xl border-4 border-slate-200 shadow-sm flex flex-col p-4 items-center justify-center" data-speech="Necesito ir al baño">
+                <img src="img/pictogramas/pic_bano.jpg" alt="Ir al baño" class="h-32 object-contain mb-2 pointer-events-none rounded" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\'><rect width=\'100\' height=\'100\' fill=\'%23eee\'/><text x=\'50%\' y=\'50%\' dominant-baseline=\'middle\' text-anchor=\'middle\'>IMG</text></svg>'">
+                <span class="text-xl font-bold">Ir al baño</span>
+                <div class="dwell-progress"></div>
+            </div>
+            
+            <div class="gaze-target bg-white rounded-2xl border-4 border-slate-200 shadow-sm flex flex-col p-4 items-center justify-center" data-speech="Quiero jugar a la pelota">
+                <img src="img/pictogramas/pic_pelota.jpg" alt="Pelota" class="h-32 object-contain mb-2 pointer-events-none rounded" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\'><rect width=\'100\' height=\'100\' fill=\'%23eee\'/><text x=\'50%\' y=\'50%\' dominant-baseline=\'middle\' text-anchor=\'middle\'>IMG</text></svg>'">
+                <span class="text-xl font-bold">Pelota</span>
+                <div class="dwell-progress"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PANTALLA DE ABECEDARIO -->
+    <div id="screen-alpha" class="hidden w-full h-full flex flex-col p-10">
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-4xl font-bold text-slate-800">Escribir Frase</h2>
+            <div class="gaze-target px-6 py-3 bg-red-100 text-red-700 rounded-xl font-bold border-2 border-red-300" data-action="back-menu">
+                Volver al Menú
+                <div class="dwell-progress"></div>
+            </div>
+        </div>
+
+        <!-- Pantalla de construcción de frase -->
+        <div class="bg-white p-6 rounded-2xl shadow-md border-2 border-slate-200 mb-6 flex justify-between items-center h-24">
+            <div id="text-constructor" class="text-4xl font-bold text-slate-700 w-3/4 truncate tracking-widest"></div>
+            <div class="flex gap-4">
+                <div class="gaze-target p-4 bg-yellow-100 border-2 border-yellow-300 rounded-xl flex items-center justify-center" data-action="alpha-space">
+                    <span class="font-bold text-yellow-800">ESPACIO</span>
+                    <div class="dwell-progress"></div>
+                </div>
+                <div class="gaze-target p-4 bg-gray-200 border-2 border-gray-400 rounded-xl flex items-center justify-center" data-action="alpha-delete">
+                    <span class="font-bold text-gray-800">BORRAR</span>
+                    <div class="dwell-progress"></div>
+                </div>
+                <div class="gaze-target p-4 bg-green-100 border-2 border-green-400 rounded-xl flex items-center justify-center" data-action="alpha-speak">
+                    <span class="font-bold text-green-800 text-2xl">🗣️ LEER</span>
+                    <div class="dwell-progress"></div>
                 </div>
             </div>
-
-            <button onclick="speakTextOutput()" class="gaze-target bg-green-500 text-white text-xl font-bold py-4 px-8 rounded-xl shadow mr-4">
-                🔊 Hablar
-            </button>
-            <button onclick="clearText()" class="gaze-target bg-red-500 text-white text-xl font-bold py-4 px-8 rounded-xl shadow mr-4">
-                🗑️ Borrar Todo
-            </button>
-            <button onclick="backspaceText()" class="gaze-target bg-orange-400 text-white text-xl font-bold py-4 px-8 rounded-xl shadow">
-                ⌫ Atrás
-            </button>
         </div>
 
-        <div class="flex-grow grid grid-cols-7 gap-2 mt-4" id="alphabet-grid">
-            <!-- Populated via JS -->
-        </div>
-        
-        <div class="mt-4 flex h-24 gap-4">
-            <button onclick="typeLetter(' ')" class="gaze-target flex-grow bg-gray-300 text-gray-800 text-3xl font-bold rounded-xl shadow flex items-center justify-center">
-                ESPACIO
-            </button>
+        <div class="grid grid-cols-7 gap-4 flex-1">
+            <!-- Letras generadas dinámicamente -->
+            <script>
+                const letras = "ABCDEFGHIJKLMNÑOPQRSTUVWXYZ".split('');
+                letras.forEach(letra => {
+                    document.write(`
+                        <div class="gaze-target bg-white rounded-xl border-2 border-slate-300 flex items-center justify-center shadow-sm" data-letter="${letra}">
+                            <img src="img/letras/letra_${letra.toLowerCase()}.jpg" class="h-16 pointer-events-none rounded" onerror="this.style.display='none'; this.nextElementSibling.style.display='block'">
+                            <span class="text-4xl font-bold hidden">${letra}</span>
+                            <div class="dwell-progress"></div>
+                        </div>
+                    `);
+                });
+            </script>
         </div>
     </div>
 
-    <!-- Application Logic -->
     <script>
-        // --- State Variables ---
-        const DWELL_TIME = 2000; // 2000ms = 2 seconds to click
-        let dwellTarget = null;
-        let dwellStartTime = 0;
-        let isChildVoice = false;
-        let currentScreen = 'screen-init';
-        let calibrationPointsLeft = 9;
+        // === SÍNTESIS DE VOZ ===
+        const synth = window.speechSynthesis;
+        let voices = [];
+        
+        synth.onvoiceschanged = () => {
+            voices = synth.getVoices().filter(v => v.lang.startsWith('es'));
+        };
 
-        // Visual elements
-        const cursor = document.getElementById('gaze-cursor');
-        const progressRing = document.getElementById('dwell-progress');
-        const textDisplay = document.getElementById('text-display');
-
-        // --- Data Definitions ---
-        const pictograms = [
-            { word: "Trabajar", icon: "👨‍💻", color: "bg-green-200 border-green-300" },
-            { word: "Desayunar", icon: "🥣", color: "bg-blue-200 border-blue-300" },
-            { word: "Leer", icon: "📖", color: "bg-pink-200 border-pink-300" },
-            { word: "Ir al baño", icon: "🚽", color: "bg-yellow-100 border-yellow-300" },
-            { word: "Pintar", icon: "🎨", color: "bg-blue-300 border-blue-400" },
-            { word: "Escribir", icon: "✍️", color: "bg-orange-100 border-orange-300" },
-            { word: "Jugar", icon: "🧸", color: "bg-yellow-200 border-yellow-400" },
-            { word: "Cantar", icon: "🎤", color: "bg-pink-300 border-pink-400" },
-            { word: "Bailar", icon: "💃", color: "bg-orange-300 border-orange-400" }
-        ];
-
-        const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
-
-        // --- Initialization & UI Setup ---
-
-        function initUI() {
-            // Setup Pictograms
-            const pictoGrid = document.getElementById('pictogram-grid');
-            pictograms.forEach(p => {
-                const btn = document.createElement('button');
-                btn.className = `gaze-target ${p.color} border-4 rounded-2xl flex flex-col items-center justify-center shadow-md hover:brightness-95`;
-                btn.innerHTML = `<span class="text-6xl mb-4">${p.icon}</span><span class="text-3xl font-bold uppercase">${p.word}</span>`;
-                btn.onclick = () => speak(p.word);
-                pictoGrid.appendChild(btn);
-            });
-
-            // Setup Alphabet
-            const alphaGrid = document.getElementById('alphabet-grid');
-            alphabet.forEach(letter => {
-                const btn = document.createElement('button');
-                // Creating a colorful border inspired by the alphabet reference
-                const borderColors = ['border-green-400', 'border-blue-400', 'border-red-400', 'border-purple-400', 'border-orange-400'];
-                const borderColor = borderColors[letter.charCodeAt(0) % borderColors.length];
-                
-                btn.className = `gaze-target bg-white border-4 ${borderColor} rounded-xl text-4xl font-bold flex items-center justify-center shadow hover:bg-gray-50`;
-                btn.innerText = letter;
-                btn.onclick = () => typeLetter(letter);
-                alphaGrid.appendChild(btn);
-            });
-
-            // Setup Calibration Points
-            const calibGrid = document.getElementById('calibration-grid');
-            for(let i=0; i<9; i++) {
-                const pt = document.createElement('button');
-                pt.className = "gaze-target calibration-point w-16 h-16 bg-red-500 rounded-full shadow-lg border-4 border-white transition-colors duration-300";
-                pt.onclick = function() {
-                    if(!this.classList.contains('calibrated')) {
-                        this.classList.add('calibrated');
-                        calibrationPointsLeft--;
-                        if(calibrationPointsLeft === 0) {
-                            setTimeout(() => switchScreen('screen-menu'), 500);
-                        }
-                    }
-                };
-                calibGrid.appendChild(pt);
-            }
-
-            // Voice Toggle
-            document.getElementById('btn-voice-toggle').onclick = function() {
-                isChildVoice = !isChildVoice;
-                this.innerHTML = isChildVoice ? "👧 Voz: Infantil" : "🗣️ Voz: Adulto";
-                this.className = `gaze-target text-2xl font-bold py-4 px-8 rounded-xl border-4 ${isChildVoice ? 'bg-pink-100 text-pink-800 border-pink-300' : 'bg-purple-100 text-purple-800 border-purple-300'}`;
-                speak(isChildVoice ? "Voz infantil activada" : "Voz de adulto activada");
-            };
-        }
-
-        // --- Screen Management ---
-        function switchScreen(screenId) {
-            document.querySelectorAll('body > div[id^="screen-"]').forEach(el => {
-                el.classList.add('hidden');
-                el.classList.remove('flex');
-            });
-            const target = document.getElementById(screenId);
-            target.classList.remove('hidden');
-            target.classList.add('flex');
-            currentScreen = screenId;
-
-            // Handle WebGazer video visibility
-            if(window.webgazer) {
-                if(screenId === 'screen-calibration') {
-                    webgazer.showVideo(true);
-                } else {
-                    webgazer.showVideo(false);
-                }
-            }
-        }
-
-        // --- Alphabet Logic ---
-        function typeLetter(letter) {
-            textDisplay.innerText += letter;
-        }
-
-        function backspaceText() {
-            textDisplay.innerText = textDisplay.innerText.slice(0, -1);
-        }
-
-        function clearText() {
-            textDisplay.innerText = "";
-        }
-
-        function speakTextOutput() {
-            if (textDisplay.innerText.trim() !== "") {
-                speak(textDisplay.innerText);
-            }
-        }
-
-        // --- Text to Speech Synthesis ---
         function speak(text) {
-            // Cancel any ongoing speech
-            window.speechSynthesis.cancel();
-
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = 'es-ES'; // Prefer Spanish
+            if (synth.speaking) synth.cancel();
             
-            // Try to find a Spanish voice
-            const voices = window.speechSynthesis.getVoices();
-            const esVoice = voices.find(v => v.lang.startsWith('es'));
-            if (esVoice) utterance.voice = esVoice;
-
-            // Apply voice modifiers
-            if (isChildVoice) {
-                utterance.pitch = 1.8;
-                utterance.rate = 1.1; 
-            } else {
-                utterance.pitch = 1.0;
-                utterance.rate = 1.0;
+            const utterance = new SpeechSynthesisUtterance(text);
+            const voiceType = document.getElementById('voice-select').value;
+            
+            if (voices.length > 0) {
+                // Intenta usar una voz femenina de Google o del sistema por defecto
+                utterance.voice = voices.find(v => v.name.includes('Google') || v.name.includes('Microsoft')) || voices[0];
             }
-
-            window.speechSynthesis.speak(utterance);
+            
+            utterance.lang = 'es-ES';
+            utterance.rate = 0.9;
+            utterance.pitch = voiceType === 'child' ? 1.8 : 1.0; // Ajuste de pitch para voz aniñada
+            
+            synth.speak(utterance);
         }
 
-        // --- WebGazer & Dwell Logic ---
-        function setDwellProgress(percentage) {
-            const circumference = 283; // 2 * pi * 45
-            const offset = circumference - (percentage * circumference);
-            progressRing.style.strokeDashoffset = offset;
+        // === CONTROL DE VISTAS ===
+        const screens = {
+            cal: document.getElementById('screen-calibration'),
+            menu: document.getElementById('screen-menu'),
+            picto: document.getElementById('screen-picto'),
+            alpha: document.getElementById('screen-alpha')
+        };
+
+        function showScreen(name) {
+            Object.values(screens).forEach(s => s.classList.add('hidden'));
+            screens[name].classList.remove('hidden');
         }
+
+        // === CALIBRACIÓN ===
+        let calClicks = 0;
+        document.getElementById('btn-start-cal').addEventListener('click', () => {
+            document.getElementById('btn-start-cal').classList.add('hidden');
+            document.getElementById('cal-points').classList.remove('hidden');
+            
+            // Iniciar WebGazer
+            webgazer.setRegression('ridge')
+                .setGazeListener(handleGaze)
+                .begin();
+            
+            webgazer.showVideoPreview(true).showPredictionPoints(true);
+        });
+
+        function calibrate(btn) {
+            btn.style.backgroundColor = '#16a34a'; // Cambia a verde
+            btn.disabled = true;
+            calClicks++;
+            
+            if (calClicks >= 5) {
+                // Ocultar video de calibración y punto de predicción interno
+                webgazer.showVideoPreview(false).showPredictionPoints(false);
+                document.getElementById('gaze-cursor').style.display = 'block';
+                showScreen('menu');
+            }
+        }
+
+        // === LÓGICA DE DWELL (FIJACIÓN) Y SELECCIÓN ===
+        const DWELL_TIME = 1500; // Milisegundos para seleccionar
+        let currentTarget = null;
+        let dwellStartTime = 0;
+        let requestAnimId = null;
 
         function handleGaze(data, elapsedTime) {
-            if (data == null) return;
-            
+            if (!data) return;
+
             const x = data.x;
             const y = data.y;
 
-            // Update custom cursor position
-            cursor.style.left = x + 'px';
-            cursor.style.top = y + 'px';
+            // Actualizar cursor visual
+            const cursor = document.getElementById('gaze-cursor');
+            cursor.style.left = `${x - 15}px`;
+            cursor.style.top = `${y - 15}px`;
 
-            // Find element under gaze (temporarily hide cursor so it doesn't block)
+            // Detectar elemento debajo del punto ocular
+            // Ocultamos temporalmente el cursor para que document.elementFromPoint no lo detecte a él mismo
             cursor.style.display = 'none';
-            const elem = document.elementFromPoint(x, y);
+            const elementUnder = document.elementFromPoint(x, y);
             cursor.style.display = 'block';
 
-            // Find closest element with class 'gaze-target'
-            const target = elem ? elem.closest('.gaze-target') : null;
+            // Buscar si el elemento es o está dentro de un "gaze-target"
+            const target = elementUnder ? elementUnder.closest('.gaze-target') : null;
 
-            if (target) {
-                if (target !== dwellTarget) {
-                    // New target focused
-                    if(dwellTarget) dwellTarget.classList.remove('dwelling');
-                    dwellTarget = target;
+            if (target !== currentTarget) {
+                // Reiniciar animación del objetivo anterior
+                if (currentTarget) {
+                    currentTarget.classList.remove('gaze-active');
+                    currentTarget.querySelector('.dwell-progress').style.width = '0%';
+                }
+                
+                // Asignar nuevo objetivo
+                currentTarget = target;
+                
+                if (currentTarget) {
+                    currentTarget.classList.add('gaze-active');
                     dwellStartTime = elapsedTime;
-                    dwellTarget.classList.add('dwelling');
-                    setDwellProgress(0);
-                } else {
-                    // Continuing focus on same target
-                    const dwelledTime = elapsedTime - dwellStartTime;
-                    const progress = Math.min(dwelledTime / DWELL_TIME, 1);
-                    setDwellProgress(progress);
+                }
+            } else if (currentTarget) {
+                // Calcular progreso
+                const elapsed = elapsedTime - dwellStartTime;
+                const progress = Math.min((elapsed / DWELL_TIME) * 100, 100);
+                
+                currentTarget.querySelector('.dwell-progress').style.width = `${progress}%`;
 
-                    if (dwelledTime >= DWELL_TIME) {
-                        // Click Triggered!
-                        target.click();
-                        
-                        // Reset dwell state to prevent double clicking immediately
-                        dwellTarget.classList.remove('dwelling');
-                        dwellTarget = null;
-                        setDwellProgress(0);
-                        
-                        // Force a small cooldown by pushing the start time forward artificially
-                        dwellStartTime = elapsedTime + 1000; 
-                    }
+                // Ejecutar acción si se completó el tiempo
+                if (elapsed >= DWELL_TIME) {
+                    executeAction(currentTarget);
+                    currentTarget.querySelector('.dwell-progress').style.width = '0%';
+                    currentTarget.classList.remove('gaze-active');
+                    currentTarget = null; // Evitar disparos múltiples
                 }
-            } else {
-                // Looking at nothing interactive
-                if (dwellTarget) {
-                    dwellTarget.classList.remove('dwelling');
-                    dwellTarget = null;
-                }
-                setDwellProgress(0);
             }
         }
 
-        // --- Start Application ---
-        document.getElementById('btn-start').addEventListener('click', async () => {
-            // Unlock speech synthesis API with a silent utterance (required by browsers)
-            const silentUtterance = new SpeechSynthesisUtterance('');
-            window.speechSynthesis.speak(silentUtterance);
+        // === EJECUCIÓN DE ACCIONES ===
+        const textConstructor = document.getElementById('text-constructor');
 
-            // Change button text while loading
-            document.getElementById('btn-start').innerText = "Cargando modelo y cámara...";
-            
-            try {
-                // Initialize WebGazer
-                await webgazer.setRegression('ridge')
-                    .setGazeListener(handleGaze)
-                    .begin();
-                    
-                webgazer.showVideoPreview(true) /* shows local video */
-                        .showPredictionPoints(false); /* Hide default red dot, we use our own */
-
-                // Style the injected video to be at the top center for better UX during calib
-                setTimeout(() => {
-                    const wgVideo = document.getElementById('webgazerVideoContainer');
-                    if(wgVideo) {
-                        wgVideo.style.position = 'absolute';
-                        wgVideo.style.top = '10px';
-                        wgVideo.style.left = '50%';
-                        wgVideo.style.transform = 'translateX(-50%)';
-                        wgVideo.style.zIndex = '50';
-                    }
-                }, 1000);
-
-                // Show our custom cursor
-                cursor.style.display = 'block';
-
-                // Move to calibration screen
-                switchScreen('screen-calibration');
+        function executeAction(element) {
+            // Acción de navegación
+            const action = element.getAttribute('data-action');
+            if (action) {
+                if (action === 'mode-picto') showScreen('picto');
+                if (action === 'mode-alpha') { showScreen('alpha'); textConstructor.innerText = ''; }
+                if (action === 'back-menu') showScreen('menu');
                 
-            } catch (err) {
-                alert("Error al iniciar WebGazer. Por favor, asegúrate de dar permisos de cámara e intenta usar un navegador compatible (Chrome/Firefox).");
-                console.error(err);
+                if (action === 'alpha-space') textConstructor.innerText += ' ';
+                if (action === 'alpha-delete') textConstructor.innerText = textConstructor.innerText.slice(0, -1);
+                if (action === 'alpha-speak') speak(textConstructor.innerText);
+                
+                // Feedback auditivo corto de clic
+                new Audio('data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU...').play().catch(()=>{});
+                return;
             }
-        });
 
-        // Initialize voices and UI on load
-        window.speechSynthesis.onvoiceschanged = () => {
-            // Forces voices to load
-            window.speechSynthesis.getVoices();
-        };
-
-        window.onload = initUI;
-
-        // Clean up WebGazer when window closes
-        window.addEventListener('beforeunload', function() {
-            if(window.webgazer) {
-                webgazer.end();
+            // Acción de leer pictograma
+            const speechText = element.getAttribute('data-speech');
+            if (speechText) {
+                speak(speechText);
+                return;
             }
-        });
 
+            // Acción de escribir letra
+            const letter = element.getAttribute('data-letter');
+            if (letter) {
+                textConstructor.innerText += letter;
+            }
+        }
     </script>
 </body>
 </html>
