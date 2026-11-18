@@ -245,7 +245,7 @@
 
         // === CALIBRACIÓN Y ARRANQUE DE WEBGAZER ===
         let calClicks = 0;
-        document.getElementById('btn-start-cal').addEventListener('click', () => {
+       document.getElementById('btn-start-cal').addEventListener('click', () => {
             document.getElementById('btn-start-cal').classList.add('hidden');
             document.getElementById('cal-points').classList.remove('hidden');
             
@@ -253,8 +253,18 @@
                 .setGazeListener(handleGaze)
                 .begin();
             
-            // Inicia la previsualización del video (el CSS ya lo posiciona en la esquina inferior izquierda)
-            webgazer.showVideoPreview(true).showPredictionPoints(true);
+            // Verificación segura para evitar el TypeError en la versión 2.0.1
+            // (La cámara y el punto ya se muestran por defecto con begin() en esta versión)
+            try {
+                if (typeof webgazer.showVideoPreview === 'function') {
+                    webgazer.showVideoPreview(true);
+                }
+                if (typeof webgazer.showPredictionPoints === 'function') {
+                    webgazer.showPredictionPoints(true);
+                }
+            } catch (e) {
+                console.warn("Aviso: Funciones visuales manejadas nativamente por WebGazer", e);
+            }
         });
 
         function calibrate(btn) {
