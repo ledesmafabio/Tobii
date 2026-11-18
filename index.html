@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tobii - Simulador de Comunicación por Rastreo Ocular</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Usamos la versión 2.0.1 para evitar errores 404 de MediaPipe en GitHub Pages -->
     <script src="https://cdn.jsdelivr.net/npm/webgazer@2.0.1/dist/webgazer.min.js"></script>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; user-select: none; }
@@ -48,6 +47,37 @@
             box-shadow: 0 10px 25px rgba(0,0,0,0.2);
             border-color: #3b82f6; /* Azul */
         }
+
+        /* SOBRESCRITURA DE WEBGAZER: Miniatura de la cámara en esquina inferior izquierda */
+        #webgazerVideoContainer {
+            position: fixed !important;
+            bottom: 20px !important;
+            left: 20px !important;
+            top: auto !important;
+            right: auto !important;
+            width: 200px !important;
+            height: 150px !important;
+            border-radius: 12px !important;
+            overflow: hidden !important;
+            border: 3px solid #cbd5e1 !important;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3) !important;
+            z-index: 9990 !important;
+            display: block !important;
+            opacity: 0.85 !important;
+            pointer-events: none !important; /* Permite que la mirada seleccione elementos que estén por debajo */
+            background-color: black !important;
+        }
+
+        #webgazerVideoFeed {
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: cover !important;
+        }
+
+        /* Ocultar la máscara verde facial para que la miniatura se vea como una cámara normal */
+        #webgazerFaceOverlay, #webgazerFaceFeedbackBox {
+            display: none !important;
+        }
     </style>
 </head>
 <body class="bg-slate-100 h-screen w-screen flex flex-col items-center justify-center">
@@ -59,17 +89,17 @@
         <h1 class="text-4xl font-bold text-slate-800 mb-6 text-center">Calibración del Sistema</h1>
         <p class="text-xl text-slate-600 mb-8 text-center max-w-2xl">
             Sigue el punto rojo con la mirada. Haz clic en los botones de las esquinas y el centro para calibrar el modelo ocular.
-            Asegúrate de tener buena iluminación.
+            Asegúrate de que tu rostro sea visible en la miniatura de la esquina.
         </p>
-        <button id="btn-start-cal" class="px-8 py-4 bg-blue-600 text-white rounded-2xl text-2xl font-bold shadow-lg hover:bg-blue-700 transition">
+        <button id="btn-start-cal" class="px-8 py-4 bg-blue-600 text-white rounded-2xl text-2xl font-bold shadow-lg hover:bg-blue-700 transition cursor-pointer pointer-events-auto">
             Iniciar Calibración
         </button>
         <div id="cal-points" class="hidden absolute inset-0 w-full h-full">
-            <button class="cal-point absolute top-10 left-10 w-8 h-8 bg-red-500 rounded-full" onclick="calibrate(this)"></button>
-            <button class="cal-point absolute top-10 right-10 w-8 h-8 bg-red-500 rounded-full" onclick="calibrate(this)"></button>
-            <button class="cal-point absolute bottom-10 left-10 w-8 h-8 bg-red-500 rounded-full" onclick="calibrate(this)"></button>
-            <button class="cal-point absolute bottom-10 right-10 w-8 h-8 bg-red-500 rounded-full" onclick="calibrate(this)"></button>
-            <button class="cal-point absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-red-500 rounded-full" onclick="calibrate(this)"></button>
+            <button class="cal-point absolute top-10 left-10 w-8 h-8 bg-red-500 rounded-full cursor-pointer" onclick="calibrate(this)"></button>
+            <button class="cal-point absolute top-10 right-10 w-8 h-8 bg-red-500 rounded-full cursor-pointer" onclick="calibrate(this)"></button>
+            <button class="cal-point absolute bottom-10 left-10 w-8 h-8 bg-red-500 rounded-full cursor-pointer" onclick="calibrate(this)"></button>
+            <button class="cal-point absolute bottom-10 right-10 w-8 h-8 bg-red-500 rounded-full cursor-pointer" onclick="calibrate(this)"></button>
+            <button class="cal-point absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-red-500 rounded-full cursor-pointer" onclick="calibrate(this)"></button>
         </div>
     </div>
 
@@ -89,7 +119,6 @@
             </div>
         </div>
         
-        <!-- Configuración de voz -->
         <div class="mt-10 flex items-center gap-4 bg-white p-4 rounded-xl shadow">
             <label class="text-xl font-semibold">Tipo de Voz:</label>
             <select id="voice-select" class="border-2 rounded p-2 text-lg">
@@ -101,7 +130,7 @@
 
     <!-- PANTALLA DE PICTOGRAMAS -->
     <div id="screen-picto" class="hidden w-full h-full flex flex-col p-10">
-        <div class="flex justify-between items-center mb-6">
+        <div class="flex justify-between items-center mb-6 pl-64"> <!-- Margen izquierdo para esquivar miniatura -->
             <h2 class="text-4xl font-bold text-slate-800">Acciones</h2>
             <div class="gaze-target px-6 py-3 bg-red-100 text-red-700 rounded-xl font-bold border-2 border-red-300" data-action="back-menu">
                 Volver al Menú
@@ -109,8 +138,7 @@
             </div>
         </div>
         
-        <div class="grid grid-cols-4 gap-6 flex-1">
-            <!-- Ejemplo de tarjetas utilizando las imágenes separadas -->
+        <div class="grid grid-cols-4 gap-6 flex-1 ml-60"> <!-- Margen para que las tarjetas no queden debajo de la cámara -->
             <div class="gaze-target bg-white rounded-2xl border-4 border-slate-200 shadow-sm flex flex-col p-4 items-center justify-center" data-speech="Quiero trabajar">
                 <img src="img/pictogramas/pic_trabajar.jpg" alt="Trabajar" class="h-32 object-contain mb-2 pointer-events-none rounded" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\'><rect width=\'100\' height=\'100\' fill=\'%23eee\'/><text x=\'50%\' y=\'50%\' dominant-baseline=\'middle\' text-anchor=\'middle\'>IMG</text></svg>'">
                 <span class="text-xl font-bold">Trabajar</span>
@@ -133,7 +161,7 @@
 
     <!-- PANTALLA DE ABECEDARIO -->
     <div id="screen-alpha" class="hidden w-full h-full flex flex-col p-10">
-        <div class="flex justify-between items-center mb-6">
+        <div class="flex justify-between items-center mb-6 pl-60">
             <h2 class="text-4xl font-bold text-slate-800">Escribir Frase</h2>
             <div class="gaze-target px-6 py-3 bg-red-100 text-red-700 rounded-xl font-bold border-2 border-red-300" data-action="back-menu">
                 Volver al Menú
@@ -141,8 +169,7 @@
             </div>
         </div>
 
-        <!-- Pantalla de construcción de frase -->
-        <div class="bg-white p-6 rounded-2xl shadow-md border-2 border-slate-200 mb-6 flex justify-between items-center h-24">
+        <div class="bg-white p-6 rounded-2xl shadow-md border-2 border-slate-200 mb-6 flex justify-between items-center h-24 ml-60">
             <div id="text-constructor" class="text-4xl font-bold text-slate-700 w-3/4 truncate tracking-widest"></div>
             <div class="flex gap-4">
                 <div class="gaze-target p-4 bg-yellow-100 border-2 border-yellow-300 rounded-xl flex items-center justify-center" data-action="alpha-space">
@@ -160,8 +187,8 @@
             </div>
         </div>
 
-        <div class="grid grid-cols-7 gap-4 flex-1">
-            <!-- Letras generadas dinámicamente -->
+        <!-- Se aplica pl-60 (padding left) para desplazar las letras y que no se superpongan visualmente con la cámara -->
+        <div class="grid grid-cols-7 gap-4 flex-1 pl-60">
             <script>
                 const letras = "ABCDEFGHIJKLMNÑOPQRSTUVWXYZ".split('');
                 letras.forEach(letra => {
@@ -193,13 +220,12 @@
             const voiceType = document.getElementById('voice-select').value;
             
             if (voices.length > 0) {
-                // Intenta usar una voz femenina de Google o del sistema por defecto
                 utterance.voice = voices.find(v => v.name.includes('Google') || v.name.includes('Microsoft')) || voices[0];
             }
             
             utterance.lang = 'es-ES';
             utterance.rate = 0.9;
-            utterance.pitch = voiceType === 'child' ? 1.8 : 1.0; // Ajuste de pitch para voz aniñada
+            utterance.pitch = voiceType === 'child' ? 1.8 : 1.0;
             
             synth.speak(utterance);
         }
@@ -217,35 +243,36 @@
             screens[name].classList.remove('hidden');
         }
 
-        // === CALIBRACIÓN ===
+        // === CALIBRACIÓN Y ARRANQUE DE WEBGAZER ===
         let calClicks = 0;
         document.getElementById('btn-start-cal').addEventListener('click', () => {
             document.getElementById('btn-start-cal').classList.add('hidden');
             document.getElementById('cal-points').classList.remove('hidden');
             
-            // Iniciar WebGazer
             webgazer.setRegression('ridge')
                 .setGazeListener(handleGaze)
                 .begin();
             
+            // Inicia la previsualización del video (el CSS ya lo posiciona en la esquina inferior izquierda)
             webgazer.showVideoPreview(true).showPredictionPoints(true);
         });
 
-       function calibrate(btn) {
+        function calibrate(btn) {
             btn.style.backgroundColor = '#16a34a';
             btn.disabled = true;
             calClicks++;
             
             if (calClicks >= 5) {
+                // Solo ocultamos el punto amarillo de predicción interno de WebGazer.
+                // NO ocultamos el video, así la cámara y el procesamiento siguen activos 100%.
                 try {
-                    // Lo separamos para evitar errores de encadenamiento en esta versión
-                    if (typeof webgazer.showVideoPreview === 'function') webgazer.showVideoPreview(false);
-                    if (typeof webgazer.showPredictionPoints === 'function') webgazer.showPredictionPoints(false);
+                    if (typeof webgazer.showPredictionPoints === 'function') {
+                        webgazer.showPredictionPoints(false);
+                    }
                 } catch (e) {
-                    console.warn("Aviso de WebGazer:", e);
+                    console.warn("Error al ocultar puntos de predicción", e);
                 }
 
-                // Forzamos el ocultamiento de la pantalla de calibración y mostramos el menú
                 document.getElementById('screen-calibration').classList.add('hidden');
                 document.getElementById('gaze-cursor').style.display = 'block';
                 showScreen('menu');
@@ -253,10 +280,9 @@
         }
 
         // === LÓGICA DE DWELL (FIJACIÓN) Y SELECCIÓN ===
-        const DWELL_TIME = 1500; // Milisegundos para seleccionar
+        const DWELL_TIME = 1500; 
         let currentTarget = null;
         let dwellStartTime = 0;
-        let requestAnimId = null;
 
         function handleGaze(data, elapsedTime) {
             if (!data) return;
@@ -264,28 +290,23 @@
             const x = data.x;
             const y = data.y;
 
-            // Actualizar cursor visual
             const cursor = document.getElementById('gaze-cursor');
             cursor.style.left = `${x - 15}px`;
             cursor.style.top = `${y - 15}px`;
 
-            // Detectar elemento debajo del punto ocular
-            // Ocultamos temporalmente el cursor para que document.elementFromPoint no lo detecte a él mismo
             cursor.style.display = 'none';
             const elementUnder = document.elementFromPoint(x, y);
             cursor.style.display = 'block';
 
-            // Buscar si el elemento es o está dentro de un "gaze-target"
             const target = elementUnder ? elementUnder.closest('.gaze-target') : null;
 
             if (target !== currentTarget) {
-                // Reiniciar animación del objetivo anterior
                 if (currentTarget) {
                     currentTarget.classList.remove('gaze-active');
-                    currentTarget.querySelector('.dwell-progress').style.width = '0%';
+                    const progressEl = currentTarget.querySelector('.dwell-progress');
+                    if (progressEl) progressEl.style.width = '0%';
                 }
                 
-                // Asignar nuevo objetivo
                 currentTarget = target;
                 
                 if (currentTarget) {
@@ -293,18 +314,17 @@
                     dwellStartTime = elapsedTime;
                 }
             } else if (currentTarget) {
-                // Calcular progreso
                 const elapsed = elapsedTime - dwellStartTime;
                 const progress = Math.min((elapsed / DWELL_TIME) * 100, 100);
                 
-                currentTarget.querySelector('.dwell-progress').style.width = `${progress}%`;
+                const progressEl = currentTarget.querySelector('.dwell-progress');
+                if (progressEl) progressEl.style.width = `${progress}%`;
 
-                // Ejecutar acción si se completó el tiempo
                 if (elapsed >= DWELL_TIME) {
                     executeAction(currentTarget);
-                    currentTarget.querySelector('.dwell-progress').style.width = '0%';
+                    if (progressEl) progressEl.style.width = '0%';
                     currentTarget.classList.remove('gaze-active');
-                    currentTarget = null; // Evitar disparos múltiples
+                    currentTarget = null; 
                 }
             }
         }
@@ -313,7 +333,6 @@
         const textConstructor = document.getElementById('text-constructor');
 
         function executeAction(element) {
-            // Acción de navegación
             const action = element.getAttribute('data-action');
             if (action) {
                 if (action === 'mode-picto') showScreen('picto');
@@ -324,19 +343,16 @@
                 if (action === 'alpha-delete') textConstructor.innerText = textConstructor.innerText.slice(0, -1);
                 if (action === 'alpha-speak') speak(textConstructor.innerText);
                 
-                // Feedback auditivo corto de clic
                 new Audio('data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU...').play().catch(()=>{});
                 return;
             }
 
-            // Acción de leer pictograma
             const speechText = element.getAttribute('data-speech');
             if (speechText) {
                 speak(speechText);
                 return;
             }
 
-            // Acción de escribir letra
             const letter = element.getAttribute('data-letter');
             if (letter) {
                 textConstructor.innerText += letter;
