@@ -24,11 +24,12 @@
             box-shadow: 0 0 10px rgba(0,0,0,0.5);
         }
 
-        /* Tarjetas interactivas */
+        /* Tarjetas interactivas - Añadido cursor-pointer para el mouse */
         .gaze-target {
             transition: all 0.3s ease;
             position: relative;
             overflow: hidden;
+            cursor: pointer; 
         }
 
         /* Barra de progreso de fijación de mirada */
@@ -48,33 +49,34 @@
             border-color: #3b82f6; /* Azul */
         }
 
-        /* SOBRESCRITURA DE WEBGAZER: Miniatura de la cámara en esquina inferior izquierda */
+        /* SOBRESCRITURA EXTREMA DE WEBGAZER: Miniatura de la cámara */
         #webgazerVideoContainer {
             position: fixed !important;
             bottom: 20px !important;
             left: 20px !important;
             top: auto !important;
             right: auto !important;
-            width: 200px !important;
-            height: 150px !important;
+            width: 240px !important;
+            height: 180px !important;
             border-radius: 12px !important;
             overflow: hidden !important;
-            border: 3px solid #cbd5e1 !important;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3) !important;
-            z-index: 9990 !important;
+            border: 4px solid #cbd5e1 !important;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5) !important;
+            z-index: 999999 !important; /* Llevado al frente absoluto */
             display: block !important;
-            opacity: 0.85 !important;
-            pointer-events: none !important; /* Permite que la mirada seleccione elementos que estén por debajo */
-            background-color: black !important;
+            opacity: 0.9 !important;
+            pointer-events: none !important;
+            background-color: #000 !important;
         }
 
         #webgazerVideoFeed {
             width: 100% !important;
             height: 100% !important;
             object-fit: cover !important;
+            display: block !important;
         }
 
-        /* Ocultar la máscara verde facial para que la miniatura se vea como una cámara normal */
+        /* Ocultar la máscara verde facial */
         #webgazerFaceOverlay, #webgazerFaceFeedbackBox {
             display: none !important;
         }
@@ -88,40 +90,47 @@
     <div id="screen-calibration" class="absolute inset-0 bg-white z-50 flex flex-col items-center justify-center p-8">
         <h1 class="text-4xl font-bold text-slate-800 mb-6 text-center">Calibración del Sistema</h1>
         <p class="text-xl text-slate-600 mb-8 text-center max-w-2xl">
-            Sigue el punto rojo con la mirada. Haz clic en los botones de las esquinas y el centro para calibrar el modelo ocular.
-            Asegúrate de que tu rostro sea visible en la miniatura de la esquina.
+            Sigue el punto rojo con la mirada y haz clic en los botones. 
+            <br><span class="text-sm text-slate-500">(Si la cámara falla, puedes usar el modo desarrollador para probar con el mouse)</span>
         </p>
-        <button id="btn-start-cal" class="px-8 py-4 bg-blue-600 text-white rounded-2xl text-2xl font-bold shadow-lg hover:bg-blue-700 transition cursor-pointer pointer-events-auto">
-            Iniciar Calibración
-        </button>
-        <div id="cal-points" class="hidden absolute inset-0 w-full h-full">
-            <button class="cal-point absolute top-10 left-10 w-8 h-8 bg-red-500 rounded-full cursor-pointer" onclick="calibrate(this)"></button>
-            <button class="cal-point absolute top-10 right-10 w-8 h-8 bg-red-500 rounded-full cursor-pointer" onclick="calibrate(this)"></button>
-            <button class="cal-point absolute bottom-10 left-10 w-8 h-8 bg-red-500 rounded-full cursor-pointer" onclick="calibrate(this)"></button>
-            <button class="cal-point absolute bottom-10 right-10 w-8 h-8 bg-red-500 rounded-full cursor-pointer" onclick="calibrate(this)"></button>
-            <button class="cal-point absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-red-500 rounded-full cursor-pointer" onclick="calibrate(this)"></button>
+        
+        <div class="flex gap-4">
+            <button id="btn-start-cal" class="px-8 py-4 bg-blue-600 text-white rounded-2xl text-2xl font-bold shadow-lg hover:bg-blue-700 transition cursor-pointer">
+                Iniciar Cámara (WebGazer)
+            </button>
+            <button id="btn-skip-cal" class="px-8 py-4 bg-slate-200 text-slate-700 rounded-2xl text-xl font-bold shadow-lg hover:bg-slate-300 transition cursor-pointer">
+                Saltar y probar con Mouse
+            </button>
+        </div>
+
+        <div id="cal-points" class="hidden absolute inset-0 w-full h-full pointer-events-none">
+            <button class="cal-point absolute top-10 left-10 w-8 h-8 bg-red-500 rounded-full cursor-pointer pointer-events-auto" onclick="calibrate(this)"></button>
+            <button class="cal-point absolute top-10 right-10 w-8 h-8 bg-red-500 rounded-full cursor-pointer pointer-events-auto" onclick="calibrate(this)"></button>
+            <button class="cal-point absolute bottom-10 left-10 w-8 h-8 bg-red-500 rounded-full cursor-pointer pointer-events-auto" onclick="calibrate(this)"></button>
+            <button class="cal-point absolute bottom-10 right-10 w-8 h-8 bg-red-500 rounded-full cursor-pointer pointer-events-auto" onclick="calibrate(this)"></button>
+            <button class="cal-point absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-red-500 rounded-full cursor-pointer pointer-events-auto" onclick="calibrate(this)"></button>
         </div>
     </div>
 
     <!-- PANTALLA PRINCIPAL (MENÚ) -->
-    <div id="screen-menu" class="hidden w-full h-full flex flex-col items-center justify-center gap-10">
+    <div id="screen-menu" class="hidden w-full h-full flex flex-col items-center justify-center gap-10 pl-64">
         <h2 class="text-5xl font-bold text-slate-800">Selecciona el modo</h2>
         <div class="flex gap-10 w-full max-w-4xl px-10">
-            <div class="gaze-target flex-1 h-80 bg-blue-100 rounded-3xl border-4 border-blue-300 flex flex-col items-center justify-center cursor-pointer shadow-md" data-action="mode-picto">
+            <div class="gaze-target flex-1 h-80 bg-blue-100 rounded-3xl border-4 border-blue-300 flex flex-col items-center justify-center shadow-md hover:bg-blue-200" data-action="mode-picto">
                 <span class="text-6xl mb-4">🖼️</span>
                 <span class="text-3xl font-bold text-blue-800">Pictogramas</span>
                 <div class="dwell-progress"></div>
             </div>
-            <div class="gaze-target flex-1 h-80 bg-purple-100 rounded-3xl border-4 border-purple-300 flex flex-col items-center justify-center cursor-pointer shadow-md" data-action="mode-alpha">
+            <div class="gaze-target flex-1 h-80 bg-purple-100 rounded-3xl border-4 border-purple-300 flex flex-col items-center justify-center shadow-md hover:bg-purple-200" data-action="mode-alpha">
                 <span class="text-6xl mb-4">🔤</span>
                 <span class="text-3xl font-bold text-purple-800">Abecedario</span>
                 <div class="dwell-progress"></div>
             </div>
         </div>
         
-        <div class="mt-10 flex items-center gap-4 bg-white p-4 rounded-xl shadow">
+        <div class="mt-10 flex items-center gap-4 bg-white p-4 rounded-xl shadow border-2 border-slate-200">
             <label class="text-xl font-semibold">Tipo de Voz:</label>
-            <select id="voice-select" class="border-2 rounded p-2 text-lg">
+            <select id="voice-select" class="border-2 rounded p-2 text-lg outline-none cursor-pointer">
                 <option value="adult">Voz Adulta</option>
                 <option value="child">Voz Aniñada (Tono agudo)</option>
             </select>
@@ -130,28 +139,28 @@
 
     <!-- PANTALLA DE PICTOGRAMAS -->
     <div id="screen-picto" class="hidden w-full h-full flex flex-col p-10">
-        <div class="flex justify-between items-center mb-6 pl-64"> <!-- Margen izquierdo para esquivar miniatura -->
+        <div class="flex justify-between items-center mb-6 pl-72"> <!-- Desplazado para esquivar cámara -->
             <h2 class="text-4xl font-bold text-slate-800">Acciones</h2>
-            <div class="gaze-target px-6 py-3 bg-red-100 text-red-700 rounded-xl font-bold border-2 border-red-300" data-action="back-menu">
+            <div class="gaze-target px-6 py-3 bg-red-100 text-red-700 rounded-xl font-bold border-2 border-red-300 hover:bg-red-200" data-action="back-menu">
                 Volver al Menú
                 <div class="dwell-progress"></div>
             </div>
         </div>
         
-        <div class="grid grid-cols-4 gap-6 flex-1 ml-60"> <!-- Margen para que las tarjetas no queden debajo de la cámara -->
-            <div class="gaze-target bg-white rounded-2xl border-4 border-slate-200 shadow-sm flex flex-col p-4 items-center justify-center" data-speech="Quiero trabajar">
+        <div class="grid grid-cols-4 gap-6 flex-1 pl-72">
+            <div class="gaze-target bg-white rounded-2xl border-4 border-slate-200 shadow-sm flex flex-col p-4 items-center justify-center hover:border-blue-400" data-speech="Quiero trabajar">
                 <img src="img/pictogramas/pic_trabajar.jpg" alt="Trabajar" class="h-32 object-contain mb-2 pointer-events-none rounded" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\'><rect width=\'100\' height=\'100\' fill=\'%23eee\'/><text x=\'50%\' y=\'50%\' dominant-baseline=\'middle\' text-anchor=\'middle\'>IMG</text></svg>'">
                 <span class="text-xl font-bold">Trabajar</span>
                 <div class="dwell-progress"></div>
             </div>
             
-            <div class="gaze-target bg-white rounded-2xl border-4 border-slate-200 shadow-sm flex flex-col p-4 items-center justify-center" data-speech="Necesito ir al baño">
+            <div class="gaze-target bg-white rounded-2xl border-4 border-slate-200 shadow-sm flex flex-col p-4 items-center justify-center hover:border-blue-400" data-speech="Necesito ir al baño">
                 <img src="img/pictogramas/pic_bano.jpg" alt="Ir al baño" class="h-32 object-contain mb-2 pointer-events-none rounded" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\'><rect width=\'100\' height=\'100\' fill=\'%23eee\'/><text x=\'50%\' y=\'50%\' dominant-baseline=\'middle\' text-anchor=\'middle\'>IMG</text></svg>'">
                 <span class="text-xl font-bold">Ir al baño</span>
                 <div class="dwell-progress"></div>
             </div>
             
-            <div class="gaze-target bg-white rounded-2xl border-4 border-slate-200 shadow-sm flex flex-col p-4 items-center justify-center" data-speech="Quiero jugar a la pelota">
+            <div class="gaze-target bg-white rounded-2xl border-4 border-slate-200 shadow-sm flex flex-col p-4 items-center justify-center hover:border-blue-400" data-speech="Quiero jugar a la pelota">
                 <img src="img/pictogramas/pic_pelota.jpg" alt="Pelota" class="h-32 object-contain mb-2 pointer-events-none rounded" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\'><rect width=\'100\' height=\'100\' fill=\'%23eee\'/><text x=\'50%\' y=\'50%\' dominant-baseline=\'middle\' text-anchor=\'middle\'>IMG</text></svg>'">
                 <span class="text-xl font-bold">Pelota</span>
                 <div class="dwell-progress"></div>
@@ -161,39 +170,38 @@
 
     <!-- PANTALLA DE ABECEDARIO -->
     <div id="screen-alpha" class="hidden w-full h-full flex flex-col p-10">
-        <div class="flex justify-between items-center mb-6 pl-60">
+        <div class="flex justify-between items-center mb-6 pl-72">
             <h2 class="text-4xl font-bold text-slate-800">Escribir Frase</h2>
-            <div class="gaze-target px-6 py-3 bg-red-100 text-red-700 rounded-xl font-bold border-2 border-red-300" data-action="back-menu">
+            <div class="gaze-target px-6 py-3 bg-red-100 text-red-700 rounded-xl font-bold border-2 border-red-300 hover:bg-red-200" data-action="back-menu">
                 Volver al Menú
                 <div class="dwell-progress"></div>
             </div>
         </div>
 
-        <div class="bg-white p-6 rounded-2xl shadow-md border-2 border-slate-200 mb-6 flex justify-between items-center h-24 ml-60">
+        <div class="bg-white p-6 rounded-2xl shadow-md border-2 border-slate-200 mb-6 flex justify-between items-center h-24 ml-72">
             <div id="text-constructor" class="text-4xl font-bold text-slate-700 w-3/4 truncate tracking-widest"></div>
             <div class="flex gap-4">
-                <div class="gaze-target p-4 bg-yellow-100 border-2 border-yellow-300 rounded-xl flex items-center justify-center" data-action="alpha-space">
+                <div class="gaze-target p-4 bg-yellow-100 border-2 border-yellow-300 rounded-xl flex items-center justify-center hover:bg-yellow-200" data-action="alpha-space">
                     <span class="font-bold text-yellow-800">ESPACIO</span>
                     <div class="dwell-progress"></div>
                 </div>
-                <div class="gaze-target p-4 bg-gray-200 border-2 border-gray-400 rounded-xl flex items-center justify-center" data-action="alpha-delete">
+                <div class="gaze-target p-4 bg-gray-200 border-2 border-gray-400 rounded-xl flex items-center justify-center hover:bg-gray-300" data-action="alpha-delete">
                     <span class="font-bold text-gray-800">BORRAR</span>
                     <div class="dwell-progress"></div>
                 </div>
-                <div class="gaze-target p-4 bg-green-100 border-2 border-green-400 rounded-xl flex items-center justify-center" data-action="alpha-speak">
+                <div class="gaze-target p-4 bg-green-100 border-2 border-green-400 rounded-xl flex items-center justify-center hover:bg-green-200" data-action="alpha-speak">
                     <span class="font-bold text-green-800 text-2xl">🗣️ LEER</span>
                     <div class="dwell-progress"></div>
                 </div>
             </div>
         </div>
 
-        <!-- Se aplica pl-60 (padding left) para desplazar las letras y que no se superpongan visualmente con la cámara -->
-        <div class="grid grid-cols-7 gap-4 flex-1 pl-60">
+        <div class="grid grid-cols-7 gap-4 flex-1 pl-72">
             <script>
                 const letras = "ABCDEFGHIJKLMNÑOPQRSTUVWXYZ".split('');
                 letras.forEach(letra => {
                     document.write(`
-                        <div class="gaze-target bg-white rounded-xl border-2 border-slate-300 flex items-center justify-center shadow-sm" data-letter="${letra}">
+                        <div class="gaze-target bg-white rounded-xl border-2 border-slate-300 flex items-center justify-center shadow-sm hover:bg-slate-50" data-letter="${letra}">
                             <img src="img/letras/letra_${letra.toLowerCase()}.jpg" class="h-16 pointer-events-none rounded" onerror="this.style.display='none'; this.nextElementSibling.style.display='block'">
                             <span class="text-4xl font-bold hidden">${letra}</span>
                             <div class="dwell-progress"></div>
@@ -214,6 +222,7 @@
         };
 
         function speak(text) {
+            if (text.trim() === '') return;
             if (synth.speaking) synth.cancel();
             
             const utterance = new SpeechSynthesisUtterance(text);
@@ -243,27 +252,40 @@
             screens[name].classList.remove('hidden');
         }
 
+        // === INICIALIZACIÓN MODO MOUSE (FALLBACK) ===
+        // Agrega evento clic a todos los elementos interactivos
+        document.querySelectorAll('.gaze-target').forEach(target => {
+            target.addEventListener('click', function() {
+                // Efecto visual rápido
+                this.classList.add('gaze-active');
+                setTimeout(() => this.classList.remove('gaze-active'), 200);
+                
+                // Ejecutar la misma lógica que usaría el ojo
+                executeAction(this);
+            });
+        });
+
+        // Botón para saltar calibración y probar con mouse
+        document.getElementById('btn-skip-cal').addEventListener('click', () => {
+            showScreen('menu');
+        });
+
         // === CALIBRACIÓN Y ARRANQUE DE WEBGAZER ===
         let calClicks = 0;
-       document.getElementById('btn-start-cal').addEventListener('click', () => {
+        document.getElementById('btn-start-cal').addEventListener('click', () => {
             document.getElementById('btn-start-cal').classList.add('hidden');
+            document.getElementById('btn-skip-cal').classList.add('hidden');
             document.getElementById('cal-points').classList.remove('hidden');
             
             webgazer.setRegression('ridge')
                 .setGazeListener(handleGaze)
                 .begin();
             
-            // Verificación segura para evitar el TypeError en la versión 2.0.1
-            // (La cámara y el punto ya se muestran por defecto con begin() en esta versión)
             try {
-                if (typeof webgazer.showVideoPreview === 'function') {
-                    webgazer.showVideoPreview(true);
-                }
-                if (typeof webgazer.showPredictionPoints === 'function') {
-                    webgazer.showPredictionPoints(true);
-                }
+                if (typeof webgazer.showVideoPreview === 'function') webgazer.showVideoPreview(true);
+                if (typeof webgazer.showPredictionPoints === 'function') webgazer.showPredictionPoints(true);
             } catch (e) {
-                console.warn("Aviso: Funciones visuales manejadas nativamente por WebGazer", e);
+                console.log("WebGazer control visual interno:", e.message);
             }
         });
 
@@ -273,15 +295,9 @@
             calClicks++;
             
             if (calClicks >= 5) {
-                // Solo ocultamos el punto amarillo de predicción interno de WebGazer.
-                // NO ocultamos el video, así la cámara y el procesamiento siguen activos 100%.
                 try {
-                    if (typeof webgazer.showPredictionPoints === 'function') {
-                        webgazer.showPredictionPoints(false);
-                    }
-                } catch (e) {
-                    console.warn("Error al ocultar puntos de predicción", e);
-                }
+                    if (typeof webgazer.showPredictionPoints === 'function') webgazer.showPredictionPoints(false);
+                } catch (e) {}
 
                 document.getElementById('screen-calibration').classList.add('hidden');
                 document.getElementById('gaze-cursor').style.display = 'block';
@@ -289,7 +305,7 @@
             }
         }
 
-        // === LÓGICA DE DWELL (FIJACIÓN) Y SELECCIÓN ===
+        // === LÓGICA DE DWELL (FIJACIÓN) ===
         const DWELL_TIME = 1500; 
         let currentTarget = null;
         let dwellStartTime = 0;
