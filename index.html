@@ -113,6 +113,9 @@
             font-size: 12px;
             box-shadow: 0 0 0 4px rgba(239,68,68,0.25);
         }
+        /* Barras laterales de navegación: no se agrandan al mirarlas */
+        .side-nav.gaze-active { transform: none; box-shadow: inset 0 0 0 6px #3b82f6; }
+
         .cal-point.done { background-color: #16a34a; box-shadow: 0 0 0 4px rgba(22,163,74,0.25); }
     </style>
 </head>
@@ -147,7 +150,7 @@
     <!-- PANTALLA PRINCIPAL (MENÚ) -->
     <div id="screen-menu" class="hidden w-full h-full flex flex-col items-center justify-center gap-10 pl-64">
         <h2 class="text-5xl font-bold text-slate-800">Selecciona el modo</h2>
-        <div class="flex gap-10 w-full max-w-4xl px-10">
+        <div class="flex gap-8 w-full max-w-6xl px-10">
             <div class="gaze-target flex-1 h-80 bg-blue-100 rounded-3xl border-4 border-blue-300 flex flex-col items-center justify-center shadow-md hover:bg-blue-200" data-action="mode-picto">
                 <span class="text-6xl mb-4">🖼️</span>
                 <span class="text-3xl font-bold text-blue-800">Pictogramas</span>
@@ -156,6 +159,11 @@
             <div class="gaze-target flex-1 h-80 bg-purple-100 rounded-3xl border-4 border-purple-300 flex flex-col items-center justify-center shadow-md hover:bg-purple-200" data-action="mode-alpha">
                 <span class="text-6xl mb-4">🔤</span>
                 <span class="text-3xl font-bold text-purple-800">Abecedario</span>
+                <div class="dwell-progress"></div>
+            </div>
+            <div class="gaze-target flex-1 h-80 bg-amber-100 rounded-3xl border-4 border-amber-300 flex flex-col items-center justify-center shadow-md hover:bg-amber-200" data-action="mode-words">
+                <span class="text-6xl mb-4">💬</span>
+                <span class="text-3xl font-bold text-amber-800">Palabras</span>
                 <div class="dwell-progress"></div>
             </div>
         </div>
@@ -222,32 +230,32 @@
                 <div class="dwell-progress"></div>
             </div>
             <div class="gaze-target bg-white rounded-2xl border-4 border-slate-200 shadow-sm flex flex-col p-2 items-center justify-center min-h-0 hover:border-blue-400" data-speech="Quiero cantar">
-                <img src="img/pictogramas/pic_cantar.jpg" alt="Cantar" class="w-full flex-1 min-h-0 max-w-[235px] max-h-[233px] object-contain mb-1 pointer-events-none rounded" onerror="imgFallback(this)">
+                <img src="img/pictogramas/cantar.jpg" alt="Cantar" class="w-full flex-1 min-h-0 max-w-[235px] max-h-[233px] object-contain mb-1 pointer-events-none rounded" onerror="imgFallback(this)">
                 <span class="text-xl font-bold">Cantar</span>
                 <div class="dwell-progress"></div>
             </div>
             <div class="gaze-target bg-white rounded-2xl border-4 border-slate-200 shadow-sm flex flex-col p-2 items-center justify-center min-h-0 hover:border-blue-400" data-speech="Quiero leer">
-                <img src="img/pictogramas/pic_leer.jpg" alt="Leer" class="w-full flex-1 min-h-0 max-w-[235px] max-h-[233px] object-contain mb-1 pointer-events-none rounded" onerror="imgFallback(this)">
+                <img src="img/pictogramas/leer.jpg" alt="Leer" class="w-full flex-1 min-h-0 max-w-[235px] max-h-[233px] object-contain mb-1 pointer-events-none rounded" onerror="imgFallback(this)">
                 <span class="text-xl font-bold">Leer</span>
                 <div class="dwell-progress"></div>
             </div>
             <div class="gaze-target bg-white rounded-2xl border-4 border-slate-200 shadow-sm flex flex-col p-2 items-center justify-center min-h-0 hover:border-blue-400" data-speech="Quiero escribir">
-                <img src="img/pictogramas/pic_escribir.jpg" alt="Escribir" class="w-full flex-1 min-h-0 max-w-[235px] max-h-[233px] object-contain mb-1 pointer-events-none rounded" onerror="imgFallback(this)">
+                <img src="img/pictogramas/escribir.jpg" alt="Escribir" class="w-full flex-1 min-h-0 max-w-[235px] max-h-[233px] object-contain mb-1 pointer-events-none rounded" onerror="imgFallback(this)">
                 <span class="text-xl font-bold">Escribir</span>
                 <div class="dwell-progress"></div>
             </div>
             <div class="gaze-target bg-white rounded-2xl border-4 border-slate-200 shadow-sm flex flex-col p-2 items-center justify-center min-h-0 hover:border-blue-400" data-speech="Quiero jugar">
-                <img src="img/pictogramas/pic_jugar.jpg" alt="Jugar" class="w-full flex-1 min-h-0 max-w-[235px] max-h-[233px] object-contain mb-1 pointer-events-none rounded" onerror="imgFallback(this)">
+                <img src="img/pictogramas/jugar.jpg" alt="Jugar" class="w-full flex-1 min-h-0 max-w-[235px] max-h-[233px] object-contain mb-1 pointer-events-none rounded" onerror="imgFallback(this)">
                 <span class="text-xl font-bold">Jugar</span>
                 <div class="dwell-progress"></div>
             </div>
             <div class="gaze-target bg-white rounded-2xl border-4 border-slate-200 shadow-sm flex flex-col p-2 items-center justify-center min-h-0 hover:border-blue-400" data-speech="Quiero pintar">
-                <img src="img/pictogramas/pic_pintar.jpg" alt="Pintar" class="w-full flex-1 min-h-0 max-w-[235px] max-h-[233px] object-contain mb-1 pointer-events-none rounded" onerror="imgFallback(this)">
+                <img src="img/pictogramas/pintar.jpg" alt="Pintar" class="w-full flex-1 min-h-0 max-w-[235px] max-h-[233px] object-contain mb-1 pointer-events-none rounded" onerror="imgFallback(this)">
                 <span class="text-xl font-bold">Pintar</span>
                 <div class="dwell-progress"></div>
             </div>
             <div class="gaze-target bg-white rounded-2xl border-4 border-slate-200 shadow-sm flex flex-col p-2 items-center justify-center min-h-0 hover:border-blue-400" data-speech="Quiero bailar">
-                <img src="img/pictogramas/pic_bailar.jpg" alt="Bailar" class="w-full flex-1 min-h-0 max-w-[235px] max-h-[233px] object-contain mb-1 pointer-events-none rounded" onerror="imgFallback(this)">
+                <img src="img/pictogramas/bailar.jpg" alt="Bailar" class="w-full flex-1 min-h-0 max-w-[235px] max-h-[233px] object-contain mb-1 pointer-events-none rounded" onerror="imgFallback(this)">
                 <span class="text-xl font-bold">Bailar</span>
                 <div class="dwell-progress"></div>
             </div>
@@ -285,6 +293,56 @@
         <div id="alpha-grid" class="grid grid-cols-7 grid-rows-4 gap-3 flex-1 min-h-0 pl-72"></div>
     </div>
 
+    <!-- PANTALLA DE PALABRAS (2 páginas, barra de frase fija) -->
+    <div id="screen-words" class="hidden relative w-full h-full flex flex-col py-10 pl-72 pr-44">
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-4xl font-bold text-slate-800">Palabras
+                <span id="words-page-label" class="text-2xl font-semibold text-slate-500 ml-3">Página 1 de 2</span>
+            </h2>
+            <div class="gaze-target px-6 py-3 bg-red-100 text-red-700 rounded-xl font-bold border-2 border-red-300 hover:bg-red-200" data-action="back-menu">
+                Volver al Menú
+                <div class="dwell-progress"></div>
+            </div>
+        </div>
+
+        <!-- Barra de frase: queda fija en ambas páginas -->
+        <div class="bg-white p-6 rounded-2xl shadow-md border-2 border-slate-200 mb-6 flex justify-between items-center gap-4 h-24">
+            <div id="words-constructor" class="flex-1 min-w-0 overflow-hidden whitespace-nowrap text-4xl font-bold text-slate-700"></div>
+            <div class="flex gap-4">
+                <div class="gaze-target p-4 bg-gray-200 border-2 border-gray-400 rounded-xl flex items-center justify-center hover:bg-gray-300" data-action="words-delete">
+                    <span class="font-bold text-gray-800">⌫ BORRAR</span>
+                    <div class="dwell-progress"></div>
+                </div>
+                <div class="gaze-target p-4 bg-orange-100 border-2 border-orange-300 rounded-xl flex items-center justify-center hover:bg-orange-200" data-action="words-clear">
+                    <span class="font-bold text-orange-800">LIMPIAR</span>
+                    <div class="dwell-progress"></div>
+                </div>
+                <div class="gaze-target p-4 bg-green-100 border-2 border-green-400 rounded-xl flex items-center justify-center hover:bg-green-200" data-action="words-speak">
+                    <span class="font-bold text-green-800 text-2xl">🗣️ LEER</span>
+                    <div class="dwell-progress"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Las grillas se generan desde WORD_PAGES (en el script) -->
+        <div id="words-page-1" class="grid grid-cols-6 grid-rows-3 gap-3 flex-1 min-h-0"></div>
+        <div id="words-page-2" class="hidden grid grid-cols-6 grid-rows-3 gap-3 flex-1 min-h-0"></div>
+
+        <!-- Barra derecha (página 1): todo el borde derecho -->
+        <div id="words-next" class="side-nav gaze-target absolute top-0 right-0 bottom-0 w-40 bg-indigo-100 border-l-4 border-indigo-300 flex flex-col items-center justify-center hover:bg-indigo-200" data-action="words-next">
+            <span class="text-7xl text-indigo-700">▶</span>
+            <span class="text-2xl font-bold text-indigo-800 text-center mt-3 leading-tight">Más<br>palabras</span>
+            <div class="dwell-progress"></div>
+        </div>
+
+        <!-- Barra izquierda (página 2): borde izquierdo, termina sobre la miniatura de la cámara -->
+        <div id="words-prev" class="hidden side-nav gaze-target absolute top-0 left-0 w-[272px] bg-indigo-100 border-r-4 border-indigo-300 flex flex-col items-center justify-center hover:bg-indigo-200" data-action="words-prev" style="bottom: 0">
+            <span class="text-7xl text-indigo-700">◀</span>
+            <span class="text-2xl font-bold text-indigo-800 text-center mt-3 leading-tight">Volver a<br>página 1</span>
+            <div class="dwell-progress"></div>
+        </div>
+    </div>
+
     <script>
         // === UTILIDADES ===
         function imgFallback(img) {
@@ -315,6 +373,51 @@
             alphaGrid.appendChild(div);
         });
 
+        // === PALABRAS (editar acá para cambiar el vocabulario) ===
+        // Cada página: 3 filas de 6 palabras. El color agrupa las palabras por tipo.
+        const WORD_PAGES = [
+            [ // Página 1: vocabulario núcleo
+                { color: 'bg-pink-100 border-pink-300 text-pink-900',     words: ['Sí', 'No', 'Hola', 'Chau', 'Gracias', 'Por favor'] },
+                { color: 'bg-yellow-100 border-yellow-300 text-yellow-900', words: ['Yo', 'Quiero', 'Necesito', 'Más', 'Ayuda', 'Listo'] },
+                { color: 'bg-emerald-100 border-emerald-300 text-emerald-900', words: ['Comer', 'Tomar', 'Agua', 'Dolor', 'Bien', 'Mal'] }
+            ],
+            [ // Página 2: ampliación
+                { color: 'bg-sky-100 border-sky-300 text-sky-900',       words: ['Ir', 'Ver', 'Esperar', 'Descansar', 'Me gusta', 'No me gusta'] },
+                { color: 'bg-violet-100 border-violet-300 text-violet-900', words: ['Vos', 'Mamá', 'Papá', 'Casa', 'Ahora', 'Después'] },
+                { color: 'bg-rose-100 border-rose-300 text-rose-900',     words: ['Frío', 'Calor', 'Cansado', 'Contento', 'Triste', '¿Dónde?'] }
+            ]
+        ];
+
+        WORD_PAGES.forEach((page, i) => {
+            const grid = document.getElementById('words-page-' + (i + 1));
+            page.forEach(row => row.words.forEach(word => {
+                const div = document.createElement('div');
+                div.className = `gaze-target rounded-2xl border-4 flex items-center justify-center text-center p-2 min-h-0 shadow-sm ${row.color}`;
+                div.dataset.word = word;
+                div.innerHTML = `<span class="text-3xl font-bold leading-tight pointer-events-none">${word}</span><div class="dwell-progress"></div>`;
+                grid.appendChild(div);
+            }));
+        });
+
+        let phraseWords = [];
+        const wordsConstructor = document.getElementById('words-constructor');
+        function renderWords() {
+            wordsConstructor.textContent = phraseWords.join(' ');
+            wordsConstructor.scrollLeft = wordsConstructor.scrollWidth; // siempre se ve el final de la frase
+        }
+
+        function showWordsPage(n) {
+            document.getElementById('words-page-1').classList.toggle('hidden', n !== 1);
+            document.getElementById('words-page-2').classList.toggle('hidden', n !== 2);
+            document.getElementById('words-next').classList.toggle('hidden', n !== 1);
+            const prev = document.getElementById('words-prev');
+            prev.classList.toggle('hidden', n !== 2);
+            // Con cámara activa, la barra izquierda termina justo encima de la miniatura
+            prev.style.bottom = gazeRunning ? '220px' : '0';
+            document.getElementById('words-page-label').textContent = `Página ${n} de 2`;
+            resetDwell();
+        }
+
         // === SÍNTESIS DE VOZ ===
         const synth = window.speechSynthesis;
         let voices = [];
@@ -341,7 +444,8 @@
             cal: document.getElementById('screen-calibration'),
             menu: document.getElementById('screen-menu'),
             picto: document.getElementById('screen-picto'),
-            alpha: document.getElementById('screen-alpha')
+            alpha: document.getElementById('screen-alpha'),
+            words: document.getElementById('screen-words')
         };
         function showScreen(name) {
             Object.values(screens).forEach(s => s.classList.add('hidden'));
@@ -674,11 +778,21 @@
                 if (action === 'alpha-space') textConstructor.innerText += '\u00A0';
                 if (action === 'alpha-delete') textConstructor.innerText = textConstructor.innerText.slice(0, -1);
                 if (action === 'alpha-speak') speak(textConstructor.innerText.replace(/\u00A0/g, ' '));
+
+                if (action === 'mode-words') { phraseWords = []; renderWords(); showWordsPage(1); showScreen('words'); }
+                if (action === 'words-next') showWordsPage(2);
+                if (action === 'words-prev') showWordsPage(1);
+                if (action === 'words-delete') { phraseWords.pop(); renderWords(); }
+                if (action === 'words-clear') { phraseWords = []; renderWords(); }
+                if (action === 'words-speak') speak(phraseWords.join(' '));
                 return;
             }
 
             const speechText = element.getAttribute('data-speech');
             if (speechText) { speak(speechText); return; }
+
+            const word = element.getAttribute('data-word');
+            if (word) { phraseWords.push(word); renderWords(); return; }
 
             const letter = element.getAttribute('data-letter');
             if (letter) textConstructor.innerText += letter;
